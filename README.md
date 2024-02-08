@@ -1,6 +1,6 @@
 # Core data structures:
 
-# Cli
+Cli
 ```go
 type Cli struct {
 	// Provide already existing file.
@@ -23,7 +23,7 @@ type Cli struct {
 }
 ```
 
-# Orchestrator
+Orchestrator
 ```go
 type Orchestrator struct {
 	JobsQueue    chan Job
@@ -39,7 +39,7 @@ type Orchestrator struct {
 }
 ```
 
-# Worker
+Worker
 ```go
 type Worker struct {
 	Id      int
@@ -48,7 +48,7 @@ type Worker struct {
 }
 ```
 
-# Chunk representation read from a file:
+Chunk representation read from a file:
 ```go
 type ReadChunk struct {
 	Index     int64
@@ -58,7 +58,7 @@ type ReadChunk struct {
 }
 ```
 
-# Submitted jobs
+Submitted jobs
 ```go
 type Job struct {
 	Index       int64
