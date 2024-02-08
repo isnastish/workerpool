@@ -1,6 +1,7 @@
 @echo off
 
-set BUILD_OPTIONS=-v
+:: -ldflags "-s -w" - Reduces size of executable by removing debug symbols.
+set BUILD_OPTIONS=-v -ldflags "-s -w"
 
 ::format source files
 go fmt ./...

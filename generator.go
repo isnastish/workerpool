@@ -1,7 +1,5 @@
 package main
 
-// TODO(alx): Use workers to generate file.
-
 import (
 	"crypto/sha256"
 	"encoding/hex"
@@ -55,7 +53,7 @@ This file shouldn't be included into a build.\n\n*/
 	wg.Add(1)
 
 	go func() {
-		DisplayProgressBar(terminateCh)
+		DisplayProgressBar("Generating file", 200, '#', terminateCh)
 		close(terminateCh)
 		wg.Done()
 	}()
@@ -77,19 +75,4 @@ This file shouldn't be included into a build.\n\n*/
 	terminateCh <- struct{}{}
 
 	wg.Wait()
-}
-
-// Display progress bar while file is being generated.
-func DisplayProgressBar(terminateCh chan struct{}) {
-	fmt.Print("Generating file: [")
-	for {
-		select {
-		case <-terminateCh: // When received terminate event
-			fmt.Print("]\n")
-			return
-		default:
-			fmt.Print(".")
-			time.Sleep(200 * time.Millisecond)
-		}
-	}
 }
