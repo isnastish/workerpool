@@ -63,18 +63,19 @@ The amount of results in a `ResultsQueue` would be equivalent to the amount of j
 
 # Building the programm
 On windows `build.bat` file should be executed which outputs a binary into `/build/` directory.
+>**TODO** Write a make file to easily build it on Unix.
 
 # Example
-The following command would generate a test file and invoke `16` workers reading one chunk of `8096` at a time:
+The following command would generate a test file and invoke `16` workers reading one chunk of `8096` at a time.
 
 `build/workers.exe -genfile -chunksize 8096`
 
-Has the next output:
+which gives the next output
 
-`
+```
 Generating file: [.................................]
  Took: 6.7476638s
 
  Reading file: [.................................]
  Took: 107.9437ms
- `
+```
