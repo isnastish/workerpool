@@ -8,12 +8,15 @@ so they read the file chunk by chunk until one of them reaches EOF.
 Then an orchestrator should accumulate the result and send it over the network.
 
 *The process of determining of how many chunks to read, offsets, and other things should be better structured.
-*TODO(alx): Try with unbuffered channels.
-*TODO(alx): Implement the other way around, writing chunks again to the file.
+TODO(alx):
+
+[ ] Try with unbuffered channels.
+[ ] Implement the other way around, writing chunks again to the file.
+[ ] Write an API for workers so we have a clear separation between its core functionality
+    and all the parameters/options that it requires to function properly.
 */
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -21,14 +24,14 @@ import (
 )
 
 type ReadChunk struct {
-	Index     int64 // make 32-bit integer
+	Index     int64 // TODO(alx): Replace with int32 or int.
 	Offset    int64
 	BytesRead int64
 	Data      []byte
 }
 
 type Job struct {
-	Index       int64
+	Index       int64 // TODO(alx): Replace with plain integer.
 	Offset      int64
 	BytesToRead int64
 }
@@ -49,9 +52,12 @@ type Orchestrator struct {
 	WorkerPool   map[int]*Worker
 	NumJobs      int64
 
+	// These things should either be removed or encapsulated better.
 	Fd        *os.File
 	FileSize  int64
 	ChunkSize int64
+
+	Verbose bool
 }
 
 func MakeJob(index, offset, bytesToRead int64) *Job {
@@ -72,22 +78,24 @@ func MakeWorker(id int, jobs <-chan Job, results chan<- JobResult) *Worker {
 
 // Or channels can be passed here.
 // And maybe file should be included into Job struct
-func (w *Worker) DoWork(fd *os.File) {
+func (w *Worker) DoWork(fd *os.File, verbose bool) {
 	for job := range w.Jobs {
 		var (
 			startByte = job.Offset
 			endByte   = startByte + job.BytesToRead
 		)
 
-		str := fmt.Sprintf(
-			"Worker %d, chunk: [%d, %d), bytes: %d\n",
-			w.Id,
-			startByte,
-			endByte,
-			job.BytesToRead,
-		)
+		if verbose {
+			str := fmt.Sprintf(
+				"Worker %d, chunk: [%d, %d), bytes: %d\n",
+				w.Id,
+				startByte,
+				endByte,
+				job.BytesToRead,
+			)
 
-		log.Println(str)
+			log.Println(str)
+		}
 
 		storage := make([]byte, job.BytesToRead)
 		bytesRead, err := fd.ReadAt(storage, job.Offset)
@@ -111,7 +119,7 @@ func (w *Worker) DoWork(fd *os.File) {
 }
 
 // Maybe jobs count should be moved into a different function?
-func MakeOrchestrator(fd *os.File, chunkSize int64) *Orchestrator {
+func MakeOrchestrator(fd *os.File, chunkSize int64, verbose bool) *Orchestrator {
 	var (
 		info, _           = fd.Stat()
 		fileSize          = info.Size()
@@ -134,12 +142,7 @@ func MakeOrchestrator(fd *os.File, chunkSize int64) *Orchestrator {
 		Fd:           fd,
 		FileSize:     fileSize,
 		ChunkSize:    chunkSize,
-	}
-}
-
-func (o *Orchestrator) RegisterWorker(id int, w *Worker) {
-	if o.WorkerPool != nil {
-		o.WorkerPool[id] = w
+		Verbose:      verbose,
 	}
 }
 
@@ -152,7 +155,7 @@ func (o *Orchestrator) Start() {
 
 	// Spin up registered workers.
 	for _, w := range o.WorkerPool {
-		go w.DoWork(o.Fd)
+		go w.DoWork(o.Fd, o.Verbose)
 	}
 
 	for ; jobIndex < o.NumJobs; jobIndex++ {
@@ -177,34 +180,20 @@ func (o *Orchestrator) End() {
 		readChunks = append(readChunks, jobRes.Chunk)
 	}
 
-	log.Println("File processing finished.")
+	if o.Verbose {
+		// TODO(alx): Write the result into a file following the same approach.
+		log.Println("File processing finished.")
+	}
 }
 
-func main() {
-	var (
-		filepath   string
-		chunkSize  int64
-		numWorkers uint64
-	)
-
-	flag.StringVar(&filepath, "file", "large.txt", "Full path to file to be read.")
-	flag.Int64Var(&chunkSize, "chunk_size", 4096, "Chunk size to be read by a single worker.")
-	flag.Uint64Var(&numWorkers, "workers", 16, "Number of workers to participate in concurrent file read.")
-
-	flag.Parse()
-
-	fd, err := os.Open(filepath)
-	if err != nil {
-		log.Fatal(err)
+func (o *Orchestrator) RegisterWorker(id int, w *Worker) {
+	if o.WorkerPool != nil {
+		o.WorkerPool[id] = w
 	}
-	defer fd.Close()
+}
 
-	o := MakeOrchestrator(fd, chunkSize)
-
-	for id := 1; id < int(numWorkers); id++ {
-		o.RegisterWorker(id, MakeWorker(id, o.JobsQueue, o.ResultsQueue))
+func (o *Orchestrator) RegisterWorkerGroup(numWorkers int) {
+	for workerId := 0; workerId < numWorkers; workerId++ {
+		o.RegisterWorker(workerId, MakeWorker(workerId, o.JobsQueue, o.ResultsQueue))
 	}
-
-	o.Start()
-	o.End()
 }
