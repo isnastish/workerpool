@@ -33,7 +33,12 @@ func GenerateFile(filepath string, numLines int64) {
 	var (
 		i      int64  = 0
 		buf           = make([]rune, len(charPool))
-		header string = "/* This file was generated. Don't modify it manually.\n In order to regenerate it run -genfile <filename>.*/\n\n"
+		header string = ```
+		/* This file was generated. Don't modify it manually.\n 
+		In order to regenerate it run ./workers -genfile <filename>.
+		This file shouldn't be included into a build.
+		*/\n\n
+		```
 	)
 
 	file, err := os.Create(filepath)
