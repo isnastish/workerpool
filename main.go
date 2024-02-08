@@ -12,8 +12,9 @@ func main() {
 	cli.ParseArgs()
 
 	if cli.GenFile {
-		// TODO(alx): Log file generation as a progress bar.
+		genStartTime := time.Now()
 		GenerateFile(cli.Filepath, cli.NumLines)
+		fmt.Printf("Took: %s\n\n", time.Since(genStartTime))
 	}
 
 	fd, err := os.Open(cli.Filepath)
@@ -25,10 +26,10 @@ func main() {
 	o := MakeOrchestrator(fd, cli.ChunkSize, cli.Verbose)
 	o.RegisterWorkerGroup(cli.NumWorkers)
 
-	startTime := time.Now()
+	fmt.Println("Reading file...")
 
+	startTime := time.Now()
 	o.Start()
 	o.End()
-
-	fmt.Printf("Task took: %s\n", time.Since(startTime))
+	fmt.Printf("Took: %s\n", time.Since(startTime))
 }

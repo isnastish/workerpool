@@ -23,15 +23,17 @@ type Cli struct {
 }
 
 func MakeCli() *Cli {
-	var cli = new(Cli)
+	var (
+		cli = new(Cli)
 
-	var defaultChunkSize int64 = 16384
-	var defaultNumWorkers int = 16
-	var defaultNumLines int64 = 1 << 20
-	var defaultFileName string = "generated_large.go"
+		defaultChunkSize  int64  = KiB(16)
+		defaultNumWorkers int    = 16
+		defaultNumLines   int64  = 1 << 20
+		defaultFileName   string = "generated_large.go"
+	)
 
 	flag.StringVar(&cli.Filepath, "file", defaultFileName, "Full path to file to be read.")
-	flag.Int64Var(&cli.ChunkSize, "chunk_size", defaultChunkSize, "Chunk size to be read by a single worker.")
+	flag.Int64Var(&cli.ChunkSize, "chunksize", defaultChunkSize, "Chunk size to be read by a single worker.")
 	flag.IntVar(&cli.NumWorkers, "workers", defaultNumWorkers, "Number of workers to participate in concurrent file read.")
 	flag.BoolVar(&cli.GenFile, "genfile", false, "File to be generated.")
 	flag.Int64Var(&cli.NumLines, "numlines", defaultNumLines, "Number of lines in file.")

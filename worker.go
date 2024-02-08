@@ -58,6 +58,9 @@ type Orchestrator struct {
 	ChunkSize int64
 
 	Verbose bool
+
+	// Not used for now, but can be used to enable/disable logging.
+	EnableLogging bool
 }
 
 func MakeJob(index, offset, bytesToRead int64) *Job {

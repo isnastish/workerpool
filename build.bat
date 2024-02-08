@@ -10,7 +10,7 @@ if not exist build (
     mkdir build
 )
 pushd build
-go build -o ./workers.exe  %BUILD_OPTIONS% ../worker.go ../cli.go ../generator.go ../main.go
+go build -o ./workers.exe  %BUILD_OPTIONS% ../worker.go ../cli.go ../generator.go ../main.go ../common.go
 popd 
 
 echo Build successfull.

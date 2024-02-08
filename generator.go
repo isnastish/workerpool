@@ -1,5 +1,7 @@
 package main
 
+// TODO(alx): Use workers to generate file.
+
 import (
 	"crypto/sha256"
 	"encoding/hex"
@@ -7,6 +9,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -31,14 +34,13 @@ func GenerateFile(filepath string, numLines int64) {
 	Init()
 
 	var (
-		i      int64  = 0
 		buf           = make([]rune, len(charPool))
-		header string = ```
-		/* This file was generated. Don't modify it manually.\n 
-		In order to regenerate it run ./workers -genfile <filename>.
-		This file shouldn't be included into a build.
-		*/\n\n
-		```
+		i      int64  = 0
+		header string = `
+/* This file was generated. Don't modify it manually.\n
+In order to regenerate it run ./workers -genfile <filename>.
+This file shouldn't be included into a build.\n\n*/
+`
 	)
 
 	file, err := os.Create(filepath)
@@ -47,9 +49,20 @@ func GenerateFile(filepath string, numLines int64) {
 	}
 	defer file.Close()
 
-	file.WriteString(header)
+	terminateCh := make(chan struct{}, 1)
 
-	fmt.Fprintf(file, "package main\n\nvar (\n")
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		DisplayProgressBar(terminateCh)
+		close(terminateCh)
+		wg.Done()
+	}()
+
+	file.WriteString(header)
+	file.WriteString("package main\n\nvar (\n")
+
 	for ; i < numLines; i++ {
 		for k := 0; k < len(charPool); k++ {
 			index := rand.Intn(len(charPool))
@@ -58,5 +71,25 @@ func GenerateFile(filepath string, numLines int64) {
 		str := computeSHA256(string((buf)))
 		fmt.Fprintf(file, "\thash%d = []rune(\"%s\")\n", i, str)
 	}
-	fmt.Fprint(file, ")")
+	file.WriteString(")\n")
+
+	// Signal goroutine to stop displaying progress bar.
+	terminateCh <- struct{}{}
+
+	wg.Wait()
+}
+
+// Display progress bar while file is being generated.
+func DisplayProgressBar(terminateCh chan struct{}) {
+	fmt.Print("Generating file: [")
+	for {
+		select {
+		case <-terminateCh: // When received terminate event
+			fmt.Print("]\n")
+			return
+		default:
+			fmt.Print(".")
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
 }
