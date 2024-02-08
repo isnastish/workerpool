@@ -6,7 +6,7 @@ where a chunk size is specified as a command-line argument using `-chunksize` fl
 The amount of workers to participate in reading the file simultaneously could be specified 
 with `-workers` flag, the default value is `16`.
 
-Amongs other flags are `-file`, used to specify a source file. If you wish a test file to be generated, `-genfile` option could be used together with `-numlimnes` to specify the amount of raws
+Among other flags are `-file`, used to specify a source file. If you wish a test file to be generated, `-genfile` option could be used together with `-numlines` to specify the amount of raws
 in a file.
 
 `-verbose` flag is used to display an intermediate state of each worker. 
@@ -66,11 +66,15 @@ On windows `build.bat` file should be executed which outputs a binary into `/bui
 
 # Example
 The following command would generate a test file and invoke `16` workers reading one chunk of `8096` at a time:
+
 `build/workers.exe -genfile -chunksize 8096`
 
 Has the next output:
-`Generating file: [.................................]
+
+`
+Generating file: [.................................]
  Took: 6.7476638s
 
  Reading file: [.................................]
- Took: 107.9437ms`
+ Took: 107.9437ms
+ `
