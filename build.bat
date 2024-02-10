@@ -6,6 +6,8 @@ set BUILD_OPTIONS=-v -ldflags "-s -w"
 ::format source files
 go fmt ./...
 
+::NOTE(alx): Make sure you don't include generated file into a build.
+
 ::build
 if not exist build (
     mkdir build

@@ -84,7 +84,7 @@ func (w *Worker) DoWork(fd *os.File, verbose bool) {
 				job.BytesToRead,
 			)
 
-			log.Println(str)
+			fmt.Println(str)
 		}
 
 		storage := make([]byte, job.BytesToRead)
@@ -168,13 +168,16 @@ func (o *Orchestrator) Run() {
 		startTime   time.Time
 	)
 
-	// Just for displaying progress bar
-	wg.Add(1)
-	go func() {
-		DisplayProgressBar("Reading file", 15, '#', terminateCh)
-		close(terminateCh)
-		wg.Done()
-	}()
+	// When verbose mode is enabled we shouldn't display progress bar.
+	// Just for displaying progress bar.
+	if !o.Verbose {
+		wg.Add(1)
+		go func() {
+			DisplayProgressBar("Reading file", 15, '#', terminateCh)
+			close(terminateCh)
+			wg.Done()
+		}()
+	}
 
 	startTime = time.Now()
 
@@ -190,6 +193,7 @@ func (o *Orchestrator) Run() {
 			break
 		}
 		o.submitJob(jobIndex, offset, o.ChunkSize)
+		offset += o.ChunkSize
 	}
 
 	close(o.JobsQueue)
@@ -198,17 +202,15 @@ func (o *Orchestrator) Run() {
 		<-o.ResultsQueue
 	}
 
-	// Send a signal to terminate progress bar.
-	terminateCh <- struct{}{}
+	if !o.Verbose {
+		// Send a signal to terminate progress bar.
+		terminateCh <- struct{}{}
 
-	// Wait for progress bar go routine to complete.
-	wg.Wait()
+		// Wait for progress bar go routine to complete.
+		wg.Wait()
+	}
 
 	fmt.Println("Took: ", time.Since(startTime))
-
-	if o.Verbose {
-		log.Println("File processing finished.")
-	}
 
 	// Close file
 	o.Fd.Close()
