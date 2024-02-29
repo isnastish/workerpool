@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -69,30 +70,6 @@ func (q *ThreadSafeQueue[T]) Push(item T) {
 	q.count++
 }
 
-func (q *ThreadSafeQueue[T]) grow() {
-	if q.cap == 0 {
-		q.cap = minCap
-		q.buf = make([]T, q.cap)
-	}
-
-	if q.count >= q.cap {
-		newCap := q.cap << 1
-		newBuf := make([]T, newCap)
-
-		if q.back > q.front {
-			copy(newBuf, q.buf[q.front:q.back])
-		} else {
-			nCopied := copy(newBuf, q.buf[q.front:q.count])
-			copy(newBuf[nCopied:], q.buf[:q.back])
-		}
-
-		q.cap = newCap
-		q.buf = newBuf
-		q.back = q.count
-		q.front = 0
-	}
-}
-
 func (q *ThreadSafeQueue[T]) TryPop(value *T) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -100,14 +77,16 @@ func (q *ThreadSafeQueue[T]) TryPop(value *T) bool {
 	if q.count == 0 {
 		return false
 	}
-	*value = q.Front()
-	q.Pop()
+	*value = q.buf[q.front]
+
+	var zeroValue T
+	q.buf[q.front] = zeroValue
+	q.front = q.nextIndex(q.front)
+	q.count--
+
 	return true
 }
 
-// Not sure whether Pop should return an element or not.
-// If we stick with std::queue implementation, it shouldn't.
-// Normally Pop doesn't return anything.
 func (q *ThreadSafeQueue[T]) Pop() T {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -124,13 +103,6 @@ func (q *ThreadSafeQueue[T]) Pop() T {
 	q.count--
 
 	return res
-}
-
-func (q *ThreadSafeQueue[T]) nextIndex(index int) int {
-	if index == (q.cap - 1) {
-		return 0
-	}
-	return index + 1
 }
 
 func (q *ThreadSafeQueue[T]) Front() T {
@@ -152,7 +124,6 @@ func (q *ThreadSafeQueue[T]) Back() T {
 		panic("Cannot retrieve Back element on empty queue.")
 	}
 
-	// wrapped
 	if q.back == 0 {
 		return q.buf[q.count-1]
 	}
@@ -160,35 +131,25 @@ func (q *ThreadSafeQueue[T]) Back() T {
 	return q.buf[q.back-1]
 }
 
-// Allowed indices are in a range [0, q.count - 1]
 func (q *ThreadSafeQueue[T]) Replace(index int, elem T) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	if q.count == 0 {
-		panic("Cannot replace on an empty queue.")
+		panic("Cannot replace, queue is empty.")
 	}
 
 	if index >= q.count {
-		panic("Cannot replace element at index [index]. Index out of range.")
+		panic(fmt.Sprintf("Cannot replace element at index [%d]. Index out of range.", index))
 	}
 
 	pos := q.front
 	for i := 0; i < index; i++ {
-		pos = q.nextIndex(q.front)
-	}
-
-	// for debuggin
-	if pos >= q.back {
-		panic("Invalid position.")
+		pos = q.nextIndex(pos)
 	}
 
 	q.buf[pos] = elem
 }
-
-// func (q *ThreadSafeQueue[T]) At(index int) T {
-// 	q.mu.Lock()
-// }
 
 func (q *ThreadSafeQueue[T]) Clear() {
 	q.mu.Lock()
@@ -198,8 +159,6 @@ func (q *ThreadSafeQueue[T]) Clear() {
 		return
 	}
 
-	// No need to initialize all the elements to zero since we operate on indices (front/back) anyway
-	// to push/pop elements.
 	q.zeroMemebers()
 }
 
@@ -207,12 +166,56 @@ func (q *ThreadSafeQueue[T]) Flush(res []T) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	copy(res, q.buf)
+	if q.count == 0 || res == nil {
+		return
+	}
+
+	if q.back > q.front {
+		copy(res, q.buf[q.front:q.back])
+	} else {
+		nCopied := copy(res, q.buf[q.front:q.cap])
+		copy(res[nCopied:], q.buf[0:q.back])
+	}
+
 	q.zeroMemebers()
 }
 
+func (q *ThreadSafeQueue[T]) grow() {
+	if q.cap == 0 {
+		q.cap = minCap
+		q.buf = make([]T, q.cap)
+	}
+
+	if q.count >= q.cap {
+		newCap := q.cap << 1
+		newBuf := make([]T, newCap)
+
+		if q.back > q.front {
+			copy(newBuf, q.buf[q.front:q.back])
+		} else {
+			nCopied := copy(newBuf, q.buf[q.front:q.cap])
+			copy(newBuf[nCopied:], q.buf[:q.back])
+		}
+
+		q.cap = newCap
+		q.buf = newBuf
+		q.back = q.count
+		q.front = 0
+	}
+}
+
+func (q *ThreadSafeQueue[T]) nextIndex(index int) int {
+	if index == (q.cap - 1) {
+		return 0
+	}
+	return index + 1
+}
+
 func (q *ThreadSafeQueue[T]) zeroMemebers() {
-	// Not sure whether we need to zero a capacity.
+	// Think about how we can avoid doing memory allocation.
+	zeroBuf := make([]T, q.count)
+	copy(q.buf, zeroBuf)
+
 	q.front = 0
 	q.back = 0
 	q.count = 0

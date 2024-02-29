@@ -1,10 +1,13 @@
 package main
 
 import (
-	_ "fmt"
-	"github.com/stretchr/testify/assert"
+	"fmt"
 	"strconv"
+	_ "sync"
+	_ "sync/atomic"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // Helper struct for testing aggregate types.
@@ -212,8 +215,6 @@ func TestQueue_WrapFrontIndex(t *testing.T) {
 	assert.EqualValues(t, q.Back(), q.Front())
 }
 
-// NOTE: Make sure that a queue works consistently with aggregate types.
-
 func TestQueue_IsEmpty(t *testing.T) {
 	q := NewQueue[Aggregate]()
 	assert.True(t, q.Empty())
@@ -235,15 +236,13 @@ func TestQueue_MakeEmpty(t *testing.T) {
 }
 
 func TestQueue_CopyTwoChunksWhenQueueIsFull(t *testing.T) {
-	const cap = 4
-	q := NewQueue[int](cap)
+	const N = 4
+	q := NewQueue[int](N)
 
-	{
-		q.Push(-124)
-		q.Push(99)
-		q.Push(178)
-		q.Push(44)
-	}
+	q.Push(-124)
+	q.Push(99)
+	q.Push(178)
+	q.Push(44)
 
 	q.Pop()
 
@@ -262,6 +261,7 @@ func TestQueue_CopyTwoChunksWhenQueueIsFull(t *testing.T) {
 
 	oldCount := q.Size()
 	q.Push(77)
+
 	/*
 		Doubles the capacity, allocates a new buffer and copies two chunks into that buffer.
 		firstChunk := q.buf[q.front:q.count]
@@ -280,4 +280,215 @@ func TestQueue_CopyTwoChunksWhenQueueIsFull(t *testing.T) {
 
 	assert.EqualValues(t, q.front, 0)
 	assert.EqualValues(t, q.back, oldCount+1)
+}
+
+func TestQueue_SingleTryPop(t *testing.T) {
+	const N = 16
+	q := NewQueue[string](N)
+
+	res := pushN(q, N/4, func(i int) string { return "push_N:" + strconv.Itoa(i) })
+	assert.ElementsMatch(t, res, q.buf[0:N/4])
+
+	nextFront := q.nextIndex(q.front)
+	oldCount := q.count
+
+	var v string
+	assert.Equal(t, q.TryPop(&v), true)
+	assert.Equal(t, v, "push_N:0")
+	assert.Equal(t, q.count, oldCount-1)
+	assert.Equal(t, q.front, nextFront)
+}
+
+func TestQueue_MultipleTryPop(t *testing.T) {
+	const N = 4
+	q := NewQueue[int](N)
+
+	pushN(q, N, func(i int) int { return i << 1 })
+
+	for i := 0; i < N; i++ {
+		var v int
+
+		nextFront := q.nextIndex(q.front)
+		oldCount := q.count
+
+		assert.Equal(t, q.TryPop(&v), true)
+		assert.Equal(t, v, i<<1)
+		assert.Equal(t, q.count, oldCount-1)
+		assert.Equal(t, nextFront, q.front)
+	}
+
+	var v int
+	assert.Equal(t, q.TryPop(&v), false)
+}
+
+// func TestQueue_ThreadSafety(t *testing.T) {
+// 	const N = 32
+// 	const halfN = N / 2
+// 	const quarterN = N / 4
+
+// 	var q = NewQueue[int](N)
+// 	var wg = sync.WaitGroup{}
+
+// 	var nPushed atomic.Int32
+// 	var nPopped atomic.Int32
+
+// 	wg.Add(1)
+// 	go func() {
+// 		pushN(q, N, func(i int) int { return i << 1 })
+// 		nPushed.Add(N)
+// 		wg.Done()
+// 	}()
+
+// 	wg.Add(1)
+// 	go func() {
+// 		popN(q, halfN)
+// 		nPopped.Add(halfN)
+// 		wg.Done()
+// 	}()
+
+// 	wg.Add(1)
+// 	go func() {
+// 		pushN(q, quarterN, func(i int) int { return (i*10 + 1) << 1 })
+// 		nPushed.Add(quarterN)
+// 		wg.Done()
+// 	}()
+
+// 	wg.Add(1)
+// 	go func() {
+// 		popN(q, halfN)
+// 		nPopped.Add(halfN)
+// 		wg.Done()
+// 	}()
+
+// 	wg.Wait()
+// 	assert.Equal(t, (nPushed.Load() - nPopped.Load()), int32(q.count))
+// }
+
+func TestQueue_FlushNoWrapping(t *testing.T) {
+	const N = 8
+	const halfN = N / 2
+
+	q := NewQueue[int]()
+	res := pushN(q, halfN, func(i int) int { return i << 1 })
+	expectedBuf := make([]int, halfN)
+	copy(expectedBuf, res)
+
+	assert.Equal(t, q.count, halfN)
+
+	flushRes := make([]int, halfN)
+	q.Flush(flushRes)
+
+	assert.ElementsMatch(t, expectedBuf, flushRes)
+
+	assert.Equal(t, q.count, 0)
+	assert.Equal(t, q.front, 0)
+	assert.Equal(t, q.back, 0)
+}
+
+func TestQueue_FlushWithWrapping(t *testing.T) {
+	const N = 8
+	const halfN = N / 2
+
+	q := NewQueue[string]()
+	res0 := pushN(q, N, func(i int) string { return "pushN:" + strconv.Itoa(i<<1) })
+	popN(q, halfN)
+	res1 := pushN(q, halfN-1, func(i int) string { return "pushN:" + strconv.Itoa((i*10)<<1) })
+	const expectedSize = N - halfN + halfN - 1
+	expectedBuf := make([]string, expectedSize)
+	n := copy(expectedBuf, res0[halfN:])
+	copy(expectedBuf[n:], res1)
+
+	assert.Equal(t, q.count, expectedSize)
+
+	flushRes := make([]string, expectedSize)
+	q.Flush(flushRes)
+
+	assert.ElementsMatch(t, expectedBuf, flushRes)
+
+	assert.Equal(t, q.count, 0)
+	assert.Equal(t, q.front, 0)
+	assert.Equal(t, q.back, 0)
+}
+
+func TestQueue_Clear(t *testing.T) {
+	const halfCap = minCap / 2
+	q := NewQueue[int]()
+
+	res := pushN(q, halfCap, func(i int) int { return i << 1 })
+	assert.ElementsMatch(t, q.buf[0:halfCap], res)
+
+	q.Clear()
+
+	assert.Equal(t, q.count, 0)
+	assert.Equal(t, q.front, 0)
+	assert.Equal(t, q.back, 0)
+
+	assert.ElementsMatch(t, q.buf, make([]int, minCap))
+}
+
+func TestQueue_ReplaceOnEmptyQueueShouldPanic(t *testing.T) {
+	const N = 4
+	q := NewQueue[string](N)
+
+	defer func() {
+		r := recover()
+		assert.True(t, r != nil)
+	}()
+
+	q.Replace(0, "NewString")
+}
+
+func TestQueue_ReplaceIndexOutOfRange(t *testing.T) {
+	const N = 4
+	q := NewQueue[string](N)
+
+	defer func() {
+		r := recover()
+		assert.True(t, r != nil)
+	}()
+
+	q.Push("push_n:0")
+	q.Push("push_n:1")
+
+	assert.Equal(t, q.count, 2)
+
+	q.Replace(3, "push_n:9999")
+}
+
+func TestQueue_ReplaceNoWrapping(t *testing.T) {
+	const N = 4
+	q := NewQueue[int](N)
+
+	res := pushN(q, N, func(i int) int { return i << 1 })
+	assert.ElementsMatch(t, q.buf, res)
+
+	q.Replace(0, 10<<1)
+	assert.Equal(t, q.buf[q.front], 10<<1)
+
+	q.Replace(N-1, 12<<1)
+	assert.Equal(t, q.Back(), 12<<1)
+}
+
+func TestQueue_ReplaceWithWrapping(t *testing.T) {
+	const N = 8
+	const halfN = N / 2
+
+	q := NewQueue[int](N)
+
+	res0 := pushN(q, N, func(i int) int { return i << 1 })
+	popN(q, halfN)
+	res1 := pushN(q, halfN-1, func(i int) int { return ((i * 10) + 1) << 1 })
+
+	const size = N - halfN + halfN - 1
+	expectedBuf := make([]int, size)
+	n := copy(expectedBuf, res0[halfN:])
+	copy(expectedBuf[n:], res1)
+
+	q.Replace(0, 10<<1)
+	assert.Equal(t, 10<<1, q.buf[q.front])
+
+	fmt.Println(q.buf)
+
+	q.Replace(q.count-1, 15<<1)
+	assert.Equal(t, 15<<1, q.Back())
 }
