@@ -15,7 +15,7 @@ type Aggregate struct {
 
 // Helper function, pushes n elements into a queue.
 // Returns a slice of pushed elements.
-func pushN[T any](q *Queue[T], n int, f func(int) T) []T {
+func pushN[T any](q *ThreadSafeQueue[T], n int, f func(int) T) []T {
 	res := make([]T, n)
 	for i := 0; i < n; i++ {
 		res[i] = f(i)
@@ -26,7 +26,7 @@ func pushN[T any](q *Queue[T], n int, f func(int) T) []T {
 
 // Helper function. Pops (n) elements from the queue
 // and returns a slice of them.
-func popN[T any](q *Queue[T], n int) []T {
+func popN[T any](q *ThreadSafeQueue[T], n int) []T {
 	res := make([]T, n)
 	for i := 0; i < n; i++ {
 		res[i] = q.Pop()
@@ -37,7 +37,7 @@ func popN[T any](q *Queue[T], n int) []T {
 func TestQueue_CreationNoCapacity(t *testing.T) {
 	q := NewQueue[string]()
 
-	assert.EqualValues(t, q.Len(), 0)
+	assert.EqualValues(t, q.Size(), 0)
 	assert.EqualValues(t, q.Cap(), 0)
 }
 
@@ -46,8 +46,8 @@ func TestQueue_CreationUseDefaultCapacity(t *testing.T) {
 
 	q.Push("baz")
 
-	assert.EqualValues(t, q.Cap(), queueMinCap)
-	assert.EqualValues(t, q.Len(), 1)
+	assert.EqualValues(t, q.Cap(), minCap)
+	assert.EqualValues(t, q.Size(), 1)
 	assert.EqualValues(t, q.front, 0)
 	assert.EqualValues(t, q.back, 1)
 }
@@ -59,7 +59,7 @@ func TestQueue_CreationCustomCapacity(t *testing.T) {
 	q := NewQueue[string](cap)
 
 	assert.EqualValues(t, q.Cap(), expectedCap)
-	assert.EqualValues(t, q.Len(), 0)
+	assert.EqualValues(t, q.Size(), 0)
 }
 
 func TestQueue_PushN(t *testing.T) {
@@ -70,7 +70,7 @@ func TestQueue_PushN(t *testing.T) {
 		res := pushN(q, N, func(i int) int { return i*10 + (i << 1) })
 
 		assert.EqualValues(t, q.Cap(), N)
-		assert.EqualValues(t, q.Len(), N)
+		assert.EqualValues(t, q.Size(), N)
 		assert.EqualValues(t, q.front, q.back)
 
 		assert.ElementsMatch(t, q.buf, res)
@@ -82,7 +82,7 @@ func TestQueue_PushN(t *testing.T) {
 		res := pushN(q, N/2, func(i int) string { return "push_N:" + strconv.Itoa(i) })
 
 		assert.EqualValues(t, q.Cap(), N)
-		assert.EqualValues(t, q.Len(), N/2)
+		assert.EqualValues(t, q.Size(), N/2)
 		assert.EqualValues(t, q.front, 0)
 		assert.EqualValues(t, q.back, N/2)
 
@@ -98,12 +98,12 @@ func TestQueue_ForceToGrow(t *testing.T) {
 	res = append(res, pushN(q, N/2, func(i int) int { return (i + 10) * 10 })...)
 
 	assert.EqualValues(t, q.Cap(), N<<1)
-	assert.EqualValues(t, q.Len(), N+N/2)
+	assert.EqualValues(t, q.Size(), N+N/2)
 	assert.EqualValues(t, q.front, 0)
-	assert.EqualValues(t, q.back, q.Len())
+	assert.EqualValues(t, q.back, q.Size())
 
 	// ignore capacity
-	assert.ElementsMatch(t, q.buf[:q.Len()], res)
+	assert.ElementsMatch(t, q.buf[:q.Size()], res)
 }
 
 func TestQueue_PushPop(t *testing.T) {
@@ -207,7 +207,7 @@ func TestQueue_WrapFrontIndex(t *testing.T) {
 	popN(q, N-3)
 
 	assert.EqualValues(t, q.front, N-5)
-	assert.EqualValues(t, q.Len(), 1)
+	assert.EqualValues(t, q.Size(), 1)
 	assert.EqualValues(t, q.Front(), 32)
 	assert.EqualValues(t, q.Back(), q.Front())
 }
@@ -228,7 +228,7 @@ func TestQueue_MakeEmpty(t *testing.T) {
 	})
 
 	popN(q, N-1)
-	assert.EqualValues(t, q.Len(), 1)
+	assert.EqualValues(t, q.Size(), 1)
 
 	popN(q, 1)
 	assert.True(t, q.Empty())
@@ -260,7 +260,7 @@ func TestQueue_CopyTwoChunksWhenQueueIsFull(t *testing.T) {
 	expected := []int{33, 99, 178, 44}
 	assert.ElementsMatch(t, q.buf, expected)
 
-	oldCount := q.Len()
+	oldCount := q.Size()
 	q.Push(77)
 	/*
 		Doubles the capacity, allocates a new buffer and copies two chunks into that buffer.
