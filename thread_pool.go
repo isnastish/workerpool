@@ -19,22 +19,26 @@ type ThreadPool struct {
 	wg sync.WaitGroup
 }
 
-func NewPool(numThreads int32) *ThreadPool {
+func NewPool(numThreads ...int32) *ThreadPool {
 	// Get a number of cores usable by the current process.
 	// This is equivalent to maximum amount of goroutines (workers) created.
 	hardwareCPU := int32(runtime.NumCPU())
 
-	// If the number of threads less than 1 or greater than hardwareCPU, perform clipping.
-	if numThreads < 1 {
-		numThreads = 1
-	} else if numThreads > hardwareCPU {
-		numThreads = hardwareCPU
+	var maxThreads int32
+	if len(numThreads) > 0 {
+		if numThreads[0] < 1 || numThreads[0] > hardwareCPU {
+			maxThreads = hardwareCPU
+		} else {
+			maxThreads = numThreads[0]
+		}
+	} else {
+		maxThreads = hardwareCPU
 	}
 
 	p := &ThreadPool{
 		waitingQueue: NewQueue[func()](),
 		tasksQueue:   NewQueue[func()](),
-		maxThreads:   numThreads,
+		maxThreads:   maxThreads,
 		wg:           sync.WaitGroup{},
 	}
 
