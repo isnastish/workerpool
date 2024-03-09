@@ -1,11 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	// Probably too heavy to be used in this project
+	"go.uber.org/zap"
 )
 
 type Metrics struct {
@@ -24,6 +26,7 @@ type ThreadPool struct {
 	displayMetrics bool
 	wg             sync.WaitGroup
 	threadCount    uint32
+	zapLogger      *zap.Logger
 
 	running bool
 }
@@ -44,6 +47,8 @@ func NewPool(displayMetrics bool, numThreads ...uint32) *ThreadPool {
 		maxThreads = hardwareCPU
 	}
 
+	logger, _ := zap.NewProduction()
+
 	const threadSafe = true
 	p := &ThreadPool{
 		waitingQueue:   NewQueue[func()](threadSafe),
@@ -51,6 +56,7 @@ func NewPool(displayMetrics bool, numThreads ...uint32) *ThreadPool {
 		maxThreads:     maxThreads,
 		displayMetrics: displayMetrics,
 		wg:             sync.WaitGroup{},
+		zapLogger:      logger,
 	}
 
 	return p
@@ -58,7 +64,7 @@ func NewPool(displayMetrics bool, numThreads ...uint32) *ThreadPool {
 
 func (p *ThreadPool) SubmitTask(task func()) {
 	if nil == task {
-		fmt.Println("WARNING: nil task was rejected.")
+		p.zapLogger.Warn("nil task was submitted. Rejecting.")
 		return
 	}
 
@@ -68,10 +74,12 @@ func (p *ThreadPool) SubmitTask(task func()) {
 }
 
 func (p *ThreadPool) ProcessSubmittedTasks() {
+	defer p.zapLogger.Sync()
+
 	p.running = true
 
 	if p.tasksQueue.Empty() {
-		fmt.Println("INFO: No tasks submitted.")
+		p.zapLogger.Info("No tasks submitted, exiting.")
 		return
 	}
 
@@ -121,21 +129,19 @@ func (p *ThreadPool) ProcessSubmittedTasks() {
 
 	// Display accumulated metrics.
 	if p.displayMetrics {
-		info := fmt.Sprintf(
-			"Metrics:\n"+
-				"\tTasks submitted:  %d\n"+
-				"\tTasks done:       %d\n"+
-				"\tTasks queued:     %d\n"+
-				"\tThreads spawned:  %d\n"+
-				"\tThreads finished: %d\n",
-			p.metrics.tasksSubmitted,
-			p.metrics.tasksDone,
-			p.metrics.tasksQueued,
-			p.metrics.threadsSpawned,
-			p.metrics.threadsFinished,
+		p.zapLogger.Info(
+			"Metrics",
+			zap.Uint32("Tasks submitted", p.metrics.tasksSubmitted),
+			zap.Uint32("Tasks done", p.metrics.tasksDone),
+			zap.Uint32("Tasks queued", p.metrics.tasksQueued),
+			zap.Uint32("Threads spawned", p.metrics.threadsSpawned),
+			zap.Uint32("Threads finished", p.metrics.threadsFinished),
 		)
-		fmt.Println(info)
 	}
+}
+
+func (p *ThreadPool) GetMetrics() Metrics {
+	return p.metrics
 }
 
 func (p *ThreadPool) spawnWorker(task func()) {
