@@ -269,7 +269,7 @@ func BenchmarkConcurrentAccumulate_T16xC16(b *testing.B) {
 	}
 }
 
-func TestReadHugeBufferChunkByChunkConcurrently(t *testing.T) {
+func TestFillHugeBufferWithDataConcurrently(t *testing.T) {
 	// fills in 4Gib buffer of bytes in ~8s
 	r := rand.New(rand.NewSource(0x2373871))
 	mu := sync.Mutex{}
