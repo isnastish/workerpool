@@ -10,15 +10,25 @@ const minCap = 64
 type ThreadSafeQueue[T any] struct {
 	// Think about type sizes, e.g. use int64 for capacity or int,
 	// there is a slight probability that we ever go beyond max(int).
-	front int
-	back  int
-	count int
-	cap   int
-	buf   []T
-	mu    sync.Mutex
+	front      int
+	back       int
+	count      int
+	cap        int
+	buf        []T
+	threadSafe bool
+
+	// Obsolete if threadSafe is false
+	mu sync.Mutex
 }
 
-func NewQueue[T any](size ...int) *ThreadSafeQueue[T] {
+// type IntTSQueue *ThreadSafeQueue[int]
+// type StrTSQueue *ThreadSafeQueue[string]
+// type F32TSQueue *ThreadSafeQueue[float32]
+// type F64TSQueue *ThreadSafeQueue[float64]
+
+// type Queue[T any] *ThreadSafeQueue[T]
+
+func NewQueue[T any](threadSafe bool, size ...int) *ThreadSafeQueue[T] {
 	var cap int
 	var buf []T
 	if len(size) > 0 {
@@ -31,38 +41,49 @@ func NewQueue[T any](size ...int) *ThreadSafeQueue[T] {
 	}
 
 	return &ThreadSafeQueue[T]{
-		cap: cap,
-		buf: buf,
+		cap:        cap,
+		buf:        buf,
+		threadSafe: threadSafe,
 	}
 }
 
 func (q *ThreadSafeQueue[T]) Cap() int {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 	return q.cap
 }
 
 func (q *ThreadSafeQueue[T]) Size() int {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 	return q.count
 }
 
 func (q *ThreadSafeQueue[T]) Empty() bool {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 	return q.count == 0
 }
 
 func (q *ThreadSafeQueue[T]) Left() int {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 	return q.cap - q.count
 }
 
 func (q *ThreadSafeQueue[T]) Push(item T) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 
 	q.grow()
 	q.buf[q.back] = item
@@ -71,8 +92,10 @@ func (q *ThreadSafeQueue[T]) Push(item T) {
 }
 
 func (q *ThreadSafeQueue[T]) TryPop(value *T) bool {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 
 	if q.count == 0 {
 		return false
@@ -88,8 +111,10 @@ func (q *ThreadSafeQueue[T]) TryPop(value *T) bool {
 }
 
 func (q *ThreadSafeQueue[T]) Pop() T {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 
 	if q.count == 0 {
 		panic("Cannot Pop on empty queue.")
@@ -106,8 +131,10 @@ func (q *ThreadSafeQueue[T]) Pop() T {
 }
 
 func (q *ThreadSafeQueue[T]) Front() T {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 
 	if q.count == 0 {
 		panic("Cannot retrieve Front element on empty queue.")
@@ -117,8 +144,10 @@ func (q *ThreadSafeQueue[T]) Front() T {
 }
 
 func (q *ThreadSafeQueue[T]) Back() T {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 
 	if q.count == 0 {
 		panic("Cannot retrieve Back element on empty queue.")
@@ -132,8 +161,10 @@ func (q *ThreadSafeQueue[T]) Back() T {
 }
 
 func (q *ThreadSafeQueue[T]) Replace(index int, elem T) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 
 	if q.count == 0 {
 		panic("Cannot replace, queue is empty.")
@@ -152,8 +183,10 @@ func (q *ThreadSafeQueue[T]) Replace(index int, elem T) {
 }
 
 func (q *ThreadSafeQueue[T]) Clear() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 
 	if q.count == 0 {
 		return
@@ -163,8 +196,10 @@ func (q *ThreadSafeQueue[T]) Clear() {
 }
 
 func (q *ThreadSafeQueue[T]) Flush(res []T) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+	if q.threadSafe {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
 
 	if q.count == 0 || res == nil {
 		return

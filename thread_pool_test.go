@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -214,4 +216,204 @@ func BenchmarkConcurrentAccumulate_T16xC16(b *testing.B) {
 			totalSum += chunkSum
 		}
 	}
+}
+
+func merge(s []int, mid int) {
+	newS := make([]int, 0, len(s))
+
+	leftLen := len(s[0:mid])
+	rightLen := len(s[mid:])
+
+	j := 0
+	i := 0
+
+	for ; i < leftLen; i++ {
+		if j == len(s[mid:]) {
+			newS = append(newS, s[i])
+			continue
+		}
+		for j < rightLen {
+			if s[i] >= s[mid+j] {
+				newS = append(newS, s[mid+j])
+				j++
+				if j == rightLen {
+					newS = append(newS, s[i])
+				}
+			} else {
+				newS = append(newS, s[i])
+				break
+			}
+		}
+	}
+	for ; j < len(s[mid:]); j++ {
+		newS = append(newS, s[mid+j])
+	}
+	copy(s, newS)
+}
+
+type MergeChunk struct {
+	data []int
+	mid  int
+}
+
+func parallelMergeSort(s []int, q *ThreadSafeQueue[MergeChunk], p *ThreadPool) {
+	if len(s) <= 1 {
+		return
+	}
+
+	mid := len(s) / 2
+	wg := sync.WaitGroup{}
+
+	wg.Add(2)
+	go func() {
+		parallelMergeSort(s[:mid], q, p)
+		wg.Done()
+	}()
+
+	go func() {
+		parallelMergeSort(s[mid:], q, p)
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	q.Push(MergeChunk{data: s, mid: mid})
+
+	fmt.Printf("Merging chunks: %v & %v\n", s[:mid], s[mid:])
+
+	// This wouldn't work because the order of merges is not preserved.
+	p.SubmitTask(func() {
+		merge(s, mid)
+	})
+}
+
+// func TestParallelMerge(t *testing.T) {
+// 	const size = 16
+// 	const halfSize = size / 2
+// 	s := make([]int, size)
+
+// 	// seed random number generator
+// 	r := rand.New(rand.NewSource(1245))
+
+// 	for i := 0; i < size; i++ {
+// 		if i < halfSize {
+// 			s[i] = r.Intn(size)
+// 			continue
+// 		}
+// 		s[i] = -r.Intn(size)
+// 	}
+
+// 	q := NewQueue[Chunk](false)
+// 	p := NewPool(displayMetrics, 4)
+
+// 	parallelMergeSort(s, q, p)
+// 	p.ProcessSubmittedTasks()
+
+// 	fmt.Print(s)
+// }
+
+func KIB(n int) uint64 {
+	return uint64(n) * 1024
+}
+
+func MIB(n int) uint64 {
+	return KIB(n) * 1024
+}
+
+func GIB(n int) uint64 {
+	return MIB(n) * 1024
+}
+
+func showMemUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	fmt.Printf("MemUsage: %dMIB\n", m.HeapAlloc/MIB(1))
+}
+
+type Chunk struct {
+	start uint64
+	end   uint64
+	data  []byte
+}
+
+func matchChunks(buf []byte, chunks chan Chunk) bool {
+	resCh := make(chan bool, len(chunks))
+	p1 := NewPool(displayMetrics, uint32(runtime.NumCPU()))
+
+	for chunk := range chunks {
+		p1.SubmitTask(func() {
+			for i := chunk.start; i < chunk.end; i++ {
+				j := i - chunk.start
+				if buf[i] != chunk.data[j] {
+					resCh <- false
+					break
+				}
+			}
+			resCh <- true
+		})
+	}
+	p1.ProcessSubmittedTasks()
+	close(resCh)
+
+	for res := range resCh {
+		if res == false {
+			return false
+		}
+	}
+	return true
+}
+
+func TestReadHugeBufferChunkByChunkConcurrently(t *testing.T) {
+	// fills in 4Gib buffer of bytes in ~8s
+	r := rand.New(rand.NewSource(0x2373871))
+	mu := sync.Mutex{}
+
+	showMemUsage()
+
+	var totalSize = GIB(1)
+	var chunkSize = MIB(64)
+	var nChunks = int(totalSize / chunkSize)
+	var rem = bool(totalSize%chunkSize != 0)
+	if rem {
+		nChunks++
+	}
+
+	buf := make([]byte, totalSize)
+	p := NewPool(displayMetrics, 16)
+	chunks := make(chan Chunk, nChunks) // expected chunks.
+
+	showMemUsage()
+
+	for i := 0; i < nChunks-2; i++ {
+		chunkId := i
+		start := uint64(chunkId) * chunkSize
+		if i == nChunks-1 && rem {
+			p.SubmitTask(func() {
+				mu.Lock()
+				r.Read(buf[start:totalSize])
+				mu.Unlock()
+				// new slices shouldn't point to the old one, that's why we need to allocate memory
+				// and copy src into a dst. But the problem is that it could impact an overall performance.
+				chunks <- Chunk{start: start, end: totalSize, data: buf[start:totalSize]}
+			})
+			continue
+		}
+		end := start + chunkSize
+		p.SubmitTask(func() {
+			// NOTE: r.Read cannot be used in a multithreaded context,
+			// thus we need to protect it with a mutex while generating random bytes.
+			mu.Lock()
+			r.Read(buf[start:end])
+			mu.Unlock()
+			chunks <- Chunk{start: start, end: end, data: buf[start:end]}
+		})
+	}
+
+	p.ProcessSubmittedTasks()
+	close(chunks)
+
+	assert.True(t, matchChunks(buf, chunks))
+
+	runtime.GC() // free memory
+	showMemUsage()
 }

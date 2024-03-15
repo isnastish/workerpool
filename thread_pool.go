@@ -1,11 +1,13 @@
 package main
 
+// What we should do instead is
 import (
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	// TODO: Remove zap logger, it's an overkill for this project.
 	// Probably too heavy to be used in this project
 	"go.uber.org/zap"
 )
@@ -73,6 +75,9 @@ func (p *ThreadPool) SubmitTask(task func()) {
 	p.metrics.tasksSubmitted++
 }
 
+// Rename to Wait function.
+// If ProcessSubmittedTasks is executed one more time on an empty queue, we end up in a trouble
+// because p.zapLogger resource was released. So most probably we have to prohibit reuse of thread pool
 func (p *ThreadPool) ProcessSubmittedTasks() {
 	defer p.zapLogger.Sync()
 
