@@ -1,17 +1,14 @@
 package main
 
 import (
-	// "context"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"runtime"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
-	"golang.org/x/net/html"
 )
 
 const displayMetrics = false
@@ -327,92 +324,4 @@ func TestFillHugeBufferWithDataConcurrently(t *testing.T) {
 
 	runtime.GC() // free memory
 	showMemUsage()
-}
-
-// Invoke pre(x) and post(x) for each node x in the tree rooted at n.
-// The same as preorder or postorder traversal.
-func forEachNode(n *html.Node, pre, post func(n *html.Node)) {
-	// Invoke pre function before iterating over the nodes.
-	if pre != nil {
-		pre(n)
-	}
-
-	for x := n.FirstChild; x != nil; x = x.NextSibling {
-		forEachNode(x, pre, post)
-	}
-
-	// Invoke post function after iterating over the nodes.
-	if post != nil {
-		post(n)
-	}
-}
-
-func extract(url string) ([]string, error) {
-	// Should be awaitable?
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-
-	// incoming requests to a server should create a Context,
-	// and outgoing calls to servers should accept a Context.
-
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("getting %s: %s", url, resp.Status)
-	}
-
-	mimetype := resp.Header.Get("content-type")
-	fmt.Print(mimetype)
-
-	// fmt.Print("Response header:")
-	// for k, v := range resp.Header {
-	// 	fmt.Printf("\theader[%s]: %v\n", k, v)
-	// }
-
-	// fmt.Print("\nRequest header:")
-	// for k, v := range resp.Request.Header {
-	// 	fmt.Printf("\theader[%s]: %v\n", k, v)
-	// }
-
-	// Get HTTP version
-	// major, minor, ok := http.ParseHTTPVersion(resp.Proto)
-	// fmt.Println("http version: ", major, minor, ok)
-
-	doc, err := html.Parse(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return nil, fmt.Errorf("parsing %s as HTML: %v", url, err)
-	}
-
-	var links []string
-	visitNode := func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			for _, a := range n.Attr {
-				if a.Key != "href" {
-					continue
-				}
-				link, err := resp.Request.URL.Parse(a.Val)
-				if err != nil {
-					continue // ignore bad URLs
-				}
-				links = append(links, link.String())
-			}
-		}
-	}
-	// pre: visitNode, post: nil
-	forEachNode(doc, visitNode, nil)
-
-	return links, nil
-}
-
-// Put into example.go file
-func TestConcurrentWebCrawler(t *testing.T) {
-	links, err := extract("https://golang.org")
-	if err != nil {
-		return
-	}
-	for idx, link := range links {
-		fmt.Printf("%d: %s\n", idx, link)
-	}
 }

@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"strconv"
-	_ "sync"
-	_ "sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -322,49 +320,6 @@ func TestQueue_MultipleTryPop(t *testing.T) {
 	var v int
 	assert.Equal(t, q.TryPop(&v), false)
 }
-
-// func TestQueue_ThreadSafety(t *testing.T) {
-// 	const N = 32
-// 	const halfN = N / 2
-// 	const quarterN = N / 4
-
-// 	var q = NewQueue[int](N)
-// 	var wg = sync.WaitGroup{}
-
-// 	var nPushed atomic.Int32
-// 	var nPopped atomic.Int32
-
-// 	wg.Add(1)
-// 	go func() {
-// 		pushN(q, N, func(i int) int { return i << 1 })
-// 		nPushed.Add(N)
-// 		wg.Done()
-// 	}()
-
-// 	wg.Add(1)
-// 	go func() {
-// 		popN(q, halfN)
-// 		nPopped.Add(halfN)
-// 		wg.Done()
-// 	}()
-
-// 	wg.Add(1)
-// 	go func() {
-// 		pushN(q, quarterN, func(i int) int { return (i*10 + 1) << 1 })
-// 		nPushed.Add(quarterN)
-// 		wg.Done()
-// 	}()
-
-// 	wg.Add(1)
-// 	go func() {
-// 		popN(q, halfN)
-// 		nPopped.Add(halfN)
-// 		wg.Done()
-// 	}()
-
-// 	wg.Wait()
-// 	assert.Equal(t, (nPushed.Load() - nPopped.Load()), int32(q.count))
-// }
 
 func TestQueue_FlushNoWrapping(t *testing.T) {
 	const N = 8
