@@ -5,30 +5,36 @@ import (
 	"sync"
 )
 
+// Minimum default capacity.
 const minCap = 64
 
-type ThreadSafeQueue[T any] struct {
-	// Think about type sizes, e.g. use int64 for capacity or int,
-	// there is a slight probability that we ever go beyond max(int).
-	front      int
-	back       int
-	count      int
-	cap        int
-	buf        []T
-	threadSafe bool
+// type QueueI[T any] interface {
+// 	Cap() int
+// 	Size() int
+// 	Empty() bool
+// 	Left() int
+// 	Push(T)
+// 	TryPop(*T) bool
+// 	Pop() T
+// 	Front() T
+// 	Back() T
+// 	Replace(int, T)
+// 	Clear()
+// 	Flush([]T)
+// }
 
-	// Obsolete if threadSafe is false
-	mu sync.Mutex
+type Queue[T any] struct {
+	front int
+	back  int
+	count int
+	cap   int
+	buf   []T
+	mu    sync.Mutex
+
+	isThreadSafe bool
 }
 
-// type IntTSQueue *ThreadSafeQueue[int]
-// type StrTSQueue *ThreadSafeQueue[string]
-// type F32TSQueue *ThreadSafeQueue[float32]
-// type F64TSQueue *ThreadSafeQueue[float64]
-
-// type Queue[T any] *ThreadSafeQueue[T]
-
-func NewQueue[T any](threadSafe bool, size ...int) *ThreadSafeQueue[T] {
+func NewQueue[T any](isThreadSafe bool, size ...int) *Queue[T] {
 	var cap int
 	var buf []T
 	if len(size) > 0 {
@@ -40,47 +46,47 @@ func NewQueue[T any](threadSafe bool, size ...int) *ThreadSafeQueue[T] {
 		buf = make([]T, cap)
 	}
 
-	return &ThreadSafeQueue[T]{
-		cap:        cap,
-		buf:        buf,
-		threadSafe: threadSafe,
+	return &Queue[T]{
+		cap:          cap,
+		buf:          buf,
+		isThreadSafe: isThreadSafe,
 	}
 }
 
-func (q *ThreadSafeQueue[T]) Cap() int {
-	if q.threadSafe {
+func (q *Queue[T]) Cap() int {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
 	return q.cap
 }
 
-func (q *ThreadSafeQueue[T]) Size() int {
-	if q.threadSafe {
+func (q *Queue[T]) Size() int {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
 	return q.count
 }
 
-func (q *ThreadSafeQueue[T]) Empty() bool {
-	if q.threadSafe {
+func (q *Queue[T]) Empty() bool {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
 	return q.count == 0
 }
 
-func (q *ThreadSafeQueue[T]) Left() int {
-	if q.threadSafe {
+func (q *Queue[T]) Left() int {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
 	return q.cap - q.count
 }
 
-func (q *ThreadSafeQueue[T]) Push(item T) {
-	if q.threadSafe {
+func (q *Queue[T]) Push(item T) {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
@@ -91,8 +97,8 @@ func (q *ThreadSafeQueue[T]) Push(item T) {
 	q.count++
 }
 
-func (q *ThreadSafeQueue[T]) TryPop(value *T) bool {
-	if q.threadSafe {
+func (q *Queue[T]) TryPop(value *T) bool {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
@@ -110,8 +116,8 @@ func (q *ThreadSafeQueue[T]) TryPop(value *T) bool {
 	return true
 }
 
-func (q *ThreadSafeQueue[T]) Pop() T {
-	if q.threadSafe {
+func (q *Queue[T]) Pop() T {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
@@ -130,8 +136,8 @@ func (q *ThreadSafeQueue[T]) Pop() T {
 	return res
 }
 
-func (q *ThreadSafeQueue[T]) Front() T {
-	if q.threadSafe {
+func (q *Queue[T]) Front() T {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
@@ -143,8 +149,8 @@ func (q *ThreadSafeQueue[T]) Front() T {
 	return q.buf[q.front]
 }
 
-func (q *ThreadSafeQueue[T]) Back() T {
-	if q.threadSafe {
+func (q *Queue[T]) Back() T {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
@@ -160,8 +166,8 @@ func (q *ThreadSafeQueue[T]) Back() T {
 	return q.buf[q.back-1]
 }
 
-func (q *ThreadSafeQueue[T]) Replace(index int, elem T) {
-	if q.threadSafe {
+func (q *Queue[T]) Replace(index int, elem T) {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
@@ -182,8 +188,8 @@ func (q *ThreadSafeQueue[T]) Replace(index int, elem T) {
 	q.buf[pos] = elem
 }
 
-func (q *ThreadSafeQueue[T]) Clear() {
-	if q.threadSafe {
+func (q *Queue[T]) Clear() {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
@@ -195,8 +201,8 @@ func (q *ThreadSafeQueue[T]) Clear() {
 	q.zeroMemebers()
 }
 
-func (q *ThreadSafeQueue[T]) Flush(res []T) {
-	if q.threadSafe {
+func (q *Queue[T]) Flush(res []T) {
+	if q.isThreadSafe {
 		q.mu.Lock()
 		defer q.mu.Unlock()
 	}
@@ -215,7 +221,7 @@ func (q *ThreadSafeQueue[T]) Flush(res []T) {
 	q.zeroMemebers()
 }
 
-func (q *ThreadSafeQueue[T]) grow() {
+func (q *Queue[T]) grow() {
 	if q.cap == 0 {
 		q.cap = minCap
 		q.buf = make([]T, q.cap)
@@ -239,14 +245,14 @@ func (q *ThreadSafeQueue[T]) grow() {
 	}
 }
 
-func (q *ThreadSafeQueue[T]) nextIndex(index int) int {
+func (q *Queue[T]) nextIndex(index int) int {
 	if index == (q.cap - 1) {
 		return 0
 	}
 	return index + 1
 }
 
-func (q *ThreadSafeQueue[T]) zeroMemebers() {
+func (q *Queue[T]) zeroMemebers() {
 	// Think about how we can avoid doing memory allocation.
 	zeroBuf := make([]T, q.count)
 	copy(q.buf, zeroBuf)

@@ -20,7 +20,7 @@ type Aggregate struct {
 
 // Helper function, pushes n elements into a queue.
 // Returns a slice of pushed elements.
-func pushN[T any](q *ThreadSafeQueue[T], n int, f func(int) T) []T {
+func pushN[T any](q *Queue[T], n int, f func(int) T) []T {
 	res := make([]T, n)
 	for i := 0; i < n; i++ {
 		res[i] = f(i)
@@ -31,7 +31,7 @@ func pushN[T any](q *ThreadSafeQueue[T], n int, f func(int) T) []T {
 
 // Helper function. Pops (n) elements from the queue
 // and returns a slice of them.
-func popN[T any](q *ThreadSafeQueue[T], n int) []T {
+func popN[T any](q *Queue[T], n int) []T {
 	res := make([]T, n)
 	for i := 0; i < n; i++ {
 		res[i] = q.Pop()

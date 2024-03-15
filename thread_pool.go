@@ -22,8 +22,8 @@ type Metrics struct {
 
 type ThreadPool struct {
 	maxThreads     uint32
-	waitingQueue   *ThreadSafeQueue[func()]
-	tasksQueue     *ThreadSafeQueue[func()]
+	waitingQueue   Queue[func()]
+	tasksQueue     Queue[func()]
 	metrics        Metrics
 	displayMetrics bool
 	wg             sync.WaitGroup
@@ -53,8 +53,6 @@ func NewPool(displayMetrics bool, numThreads ...uint32) *ThreadPool {
 
 	const threadSafe = true
 	p := &ThreadPool{
-		waitingQueue:   NewQueue[func()](threadSafe),
-		tasksQueue:     NewQueue[func()](threadSafe),
 		maxThreads:     maxThreads,
 		displayMetrics: displayMetrics,
 		wg:             sync.WaitGroup{},
