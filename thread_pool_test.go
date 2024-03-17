@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -113,7 +114,7 @@ func matchChunks(buf []byte, chunks chan Chunk) bool {
 			resCh <- true
 		})
 	}
-	p1.ProcessSubmittedTasks()
+	p1.Wait()
 	close(resCh)
 
 	for res := range resCh {
@@ -165,7 +166,7 @@ func TestExample(t *testing.T) {
 		})
 	}
 
-	p.ProcessSubmittedTasks()
+	p.Wait()
 
 	close(resCh)
 
@@ -208,7 +209,7 @@ func TestExample2(t *testing.T) {
 		})
 	}
 
-	p.ProcessSubmittedTasks()
+	p.Wait()
 
 	close(resCh)
 
@@ -259,7 +260,7 @@ func BenchmarkConcurrentAccumulate_T16xC16(b *testing.B) {
 		resCh := make(chan int64, nChunks)
 
 		distributeWorkByChunks(data, p, resCh, chunkSize)
-		p.ProcessSubmittedTasks()
+		p.Wait()
 
 		close(resCh)
 
@@ -317,11 +318,31 @@ func TestFillHugeBufferWithDataConcurrently(t *testing.T) {
 		})
 	}
 
-	p.ProcessSubmittedTasks()
+	p.Wait()
 	close(chunks)
 
 	assert.True(t, matchChunks(buf, chunks))
 
 	runtime.GC() // free memory
 	showMemUsage()
+}
+
+func TestNoMoreTasksColdBeSubmittedAfterWait(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	var counter uint32
+
+	p := NewPool(displayMetrics, 4)
+
+	const TASKS_COUNT = 32
+	for i := 0; i < TASKS_COUNT; i++ {
+		p.SubmitTask(func() {
+			atomic.AddUint32(&counter, 1)
+		})
+	}
+
+	p.Wait()
+
+	assert.Equal(t, atomic.LoadUint32(&counter), uint32(32)) // using atomic.LoadUint32 even though it's no longer accessed concurrently.
+	assert.True(t, p.submissionBlocked)
 }

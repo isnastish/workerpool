@@ -1,15 +1,17 @@
 package main
 
-// What we should do instead is
+// On pool creation we should spawn a single go routine which will process all
+// incoming tasks on the background.
+// p.Wait() procedure should wait for all submitted tasks to complete,
+// what's important is that no more tasks could be submitted after p.Wait() has been invoked.
+// But those submitted already should run until their completion.
+
 import (
+	"go.uber.org/zap"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	// TODO: Remove zap logger, it's an overkill for this project.
-	// Probably too heavy to be used in this project
-	"go.uber.org/zap"
 )
 
 type Metrics struct {
@@ -21,16 +23,16 @@ type Metrics struct {
 }
 
 type ThreadPool struct {
-	maxThreads     uint32
-	waitingQueue   Queue[func()]
-	tasksQueue     Queue[func()]
-	metrics        Metrics
-	displayMetrics bool
-	wg             sync.WaitGroup
-	threadCount    uint32
-	zapLogger      *zap.Logger
-
-	running bool
+	maxThreads        uint32
+	waitingQueue      Queue[func()]
+	tasksQueue        Queue[func()]
+	metrics           Metrics
+	displayMetrics    bool
+	wg                sync.WaitGroup
+	threadCount       uint32
+	zapLogger         *zap.Logger
+	submissionBlocked bool
+	running           bool
 }
 
 func NewPool(displayMetrics bool, numThreads ...uint32) *ThreadPool {
@@ -51,7 +53,6 @@ func NewPool(displayMetrics bool, numThreads ...uint32) *ThreadPool {
 
 	logger, _ := zap.NewProduction()
 
-	const threadSafe = true
 	p := &ThreadPool{
 		maxThreads:     maxThreads,
 		displayMetrics: displayMetrics,
@@ -68,15 +69,17 @@ func (p *ThreadPool) SubmitTask(task func()) {
 		return
 	}
 
+	if p.submissionBlocked {
+		p.zapLogger.Warn("Thread pool finished, no more tasks could be submitted.")
+		return
+	}
+
 	// Submit tasks into a tasksQueue for later execution by workers.
 	p.tasksQueue.Push(task)
 	p.metrics.tasksSubmitted++
 }
 
-// Rename to Wait function.
-// If ProcessSubmittedTasks is executed one more time on an empty queue, we end up in a trouble
-// because p.zapLogger resource was released. So most probably we have to prohibit reuse of thread pool
-func (p *ThreadPool) ProcessSubmittedTasks() {
+func (p *ThreadPool) Wait() {
 	defer p.zapLogger.Sync()
 
 	p.running = true
@@ -129,6 +132,8 @@ func (p *ThreadPool) ProcessSubmittedTasks() {
 
 	// Wait for all spawned workers to finish their work.
 	p.wg.Wait()
+
+	p.submissionBlocked = true
 
 	// Display accumulated metrics.
 	if p.displayMetrics {
