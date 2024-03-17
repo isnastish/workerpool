@@ -35,6 +35,7 @@ type ThreadPool struct {
 	metrics        Metrics
 	displayMetrics bool
 	wg             sync.WaitGroup
+	doneCh         chan struct{}
 	threadCount    uint32
 	zapLogger      *zap.Logger
 
@@ -66,8 +67,17 @@ func NewPool(displayMetrics bool, numThreads ...uint32) *ThreadPool {
 		tasksQueue:     NewQueue[func()](threadSafe),
 		displayMetrics: displayMetrics,
 		wg:             sync.WaitGroup{},
+		doneCh:         make(chan struct{}),
 		zapLogger:      logger,
 	}
+
+	// The simpliest method to wait for tasks to complete.
+	// Will satisfy our needs for now.
+	go func() {
+		p.processTasks()
+		p.doneCh <- struct{}{}
+		close(p.doneCh)
+	}()
 
 	return p
 }
@@ -85,10 +95,10 @@ func (p *ThreadPool) SubmitTask(task func()) {
 
 	// Submit tasks into a tasksQueue for later execution by workers.
 	p.tasksQueue.Push(task)
-	p.metrics.tasksSubmitted++
+	atomic.AddUint32(&p.metrics.tasksSubmitted, 1)
 }
 
-func (p *ThreadPool) Wait() {
+func (p *ThreadPool) processTasks() {
 	defer p.zapLogger.Sync()
 
 	p.running = true
@@ -142,13 +152,11 @@ func (p *ThreadPool) Wait() {
 	// Wait for all spawned workers to finish their work.
 	p.wg.Wait()
 
-	p.submissionBlocked = true
-
 	// Display accumulated metrics.
 	if p.displayMetrics {
 		p.zapLogger.Info(
 			"Metrics",
-			zap.Uint32("Tasks submitted", p.metrics.tasksSubmitted),
+			zap.Uint32("Tasks submitted", atomic.LoadUint32(&p.metrics.tasksSubmitted)),
 			zap.Uint32("Tasks done", p.metrics.tasksDone),
 			zap.Uint32("Tasks queued", p.metrics.tasksQueued),
 			zap.Uint32("Threads spawned", p.metrics.threadsSpawned),
@@ -183,4 +191,9 @@ func (p *ThreadPool) worker(task func()) {
 	atomic.AddUint32(&p.metrics.threadsFinished, 1)
 
 	p.wg.Done()
+}
+
+func (p *ThreadPool) Wait() {
+	p.submissionBlocked = true
+	<-p.doneCh
 }

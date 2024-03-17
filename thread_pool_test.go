@@ -131,6 +131,7 @@ func TestClipThreadCount(t *testing.T) {
 	const maxThreads = 256
 	var expectedThreadCount = uint32(runtime.NumCPU())
 	p := NewPool(displayMetrics, maxThreads)
+	p.Wait()
 	assert.Equal(t, p.maxThreads, expectedThreadCount)
 }
 
@@ -139,6 +140,7 @@ func TestCorrectWorkerCount(t *testing.T) {
 
 	const maxThreads = 16
 	p := NewPool(displayMetrics, maxThreads)
+	p.Wait()
 	assert.EqualValues(t, p.maxThreads, maxThreads)
 }
 
