@@ -6,7 +6,7 @@ import (
 	"golang.org/x/net/html"
 	"net/http"
 	"sync"
-	"time"
+	_ "time"
 )
 
 type UrlInfo struct {
@@ -156,40 +156,38 @@ func traverseURL_BFS_Concurrent(url string, depth int) {
 		}
 	}()
 
-	t := time.NewTimer(500 * time.Millisecond)
-	for {
-		select {
-		case info := <-urls:
-			if info.depth < depth {
-				go func(info UrlInfo) {
-					response, err := http.Get(info.url)
-					if err != nil {
-						return
-					}
+	p := NewPool(false, 16)
 
-					if response.StatusCode != http.StatusOK {
-						response.Body.Close()
-						return
-					}
+	for info := range urls {
+		z := info
+		if info.depth < depth {
+			p.SubmitTask(func() {
+				response, err := http.Get(z.url)
+				if err != nil {
+					return
+				}
 
-					root, err := html.Parse(response.Body)
-					if err != nil {
-						response.Body.Close()
-						return
-					}
-
+				if response.StatusCode != http.StatusOK {
 					response.Body.Close()
-					for _, url := range traverseHtmlParseTree(root, response) {
-						urls <- UrlInfo{url, info.depth + 1}
-						allUrls <- url
-					}
-				}(info)
-			}
-			t.Reset(500 * time.Millisecond)
-		case <-t.C: // timeout if no urls were submitted in 500ml
-			return
+					return
+				}
+
+				root, err := html.Parse(response.Body)
+				if err != nil {
+					response.Body.Close()
+					return
+				}
+
+				response.Body.Close()
+				for _, url := range traverseHtmlParseTree(root, response) {
+					urls <- UrlInfo{url, z.depth + 1}
+					allUrls <- url
+				}
+			})
 		}
 	}
+
+	p.Wait()
 }
 
 func main() {
@@ -198,5 +196,4 @@ func main() {
 
 	// traverseURL_BFS_StackBased("https://python.org", depth)
 	traverseURL_BFS_Concurrent("https://python.org", depth)
-
 }
