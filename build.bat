@@ -6,8 +6,6 @@ set BUILD_OPTIONS=-v -ldflags "-s -w"
 ::format source files
 go fmt ./...
 
-::NOTE(alx): Make sure you don't include generated file into a build.
-
 ::build
 if not exist build (
     mkdir build
@@ -15,6 +13,9 @@ if not exist build (
 pushd build
 go build -o ./workers.exe  %BUILD_OPTIONS% ../worker.go ../cli.go ../generator.go ../main.go ../common.go
 popd 
+
+::test
+go test ./thread_pool_test.go ./thread_pool.go ./queue_test.go ./queue.go -v
 
 echo Build successfull.
 

@@ -323,8 +323,8 @@ func TestFillHugeBufferWithDataConcurrently(t *testing.T) {
 
 	assert.True(t, matchChunks(buf, chunks))
 
-	runtime.GC() // free memory
-	showMemUsage()
+	runtime.GC()   // free memory
+	showMemUsage() // 0
 }
 
 func TestNoMoreTasksColdBeSubmittedAfterWait(t *testing.T) {
@@ -332,7 +332,7 @@ func TestNoMoreTasksColdBeSubmittedAfterWait(t *testing.T) {
 
 	var counter uint32
 
-	p := NewPool(displayMetrics, 4)
+	p := NewPool(false, 4)
 	task := func() {
 		atomic.AddUint32(&counter, 1)
 	}

@@ -5,13 +5,19 @@ package main
 // p.Wait() procedure should wait for all submitted tasks to complete,
 // what's important is that no more tasks could be submitted after p.Wait() has been invoked.
 // But those submitted already should run until their completion.
+// We should introduce separate queues in order to avoid queue contention.
+// For example tasks are submitted to one queue (tasksQueue),
+// but wokers pull out work from a different queue (poolWorkQueue/sharedWorkQueue).
+// So we don't push and pull from the same queue.
 
 import (
-	"go.uber.org/zap"
+	_ "fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type Metrics struct {
@@ -23,14 +29,15 @@ type Metrics struct {
 }
 
 type ThreadPool struct {
-	maxThreads        uint32
-	waitingQueue      Queue[func()]
-	tasksQueue        Queue[func()]
-	metrics           Metrics
-	displayMetrics    bool
-	wg                sync.WaitGroup
-	threadCount       uint32
-	zapLogger         *zap.Logger
+	maxThreads     uint32
+	waitingQueue   Queue[func()]
+	tasksQueue     *Queue[func()]
+	metrics        Metrics
+	displayMetrics bool
+	wg             sync.WaitGroup
+	threadCount    uint32
+	zapLogger      *zap.Logger
+
 	submissionBlocked bool
 	running           bool
 }
@@ -53,8 +60,10 @@ func NewPool(displayMetrics bool, numThreads ...uint32) *ThreadPool {
 
 	logger, _ := zap.NewProduction()
 
+	const threadSafe = true
 	p := &ThreadPool{
 		maxThreads:     maxThreads,
+		tasksQueue:     NewQueue[func()](threadSafe),
 		displayMetrics: displayMetrics,
 		wg:             sync.WaitGroup{},
 		zapLogger:      logger,
@@ -153,7 +162,6 @@ func (p *ThreadPool) GetMetrics() Metrics {
 }
 
 func (p *ThreadPool) spawnWorker(task func()) {
-	// Create a worker and assign a task for it to execute.
 	p.wg.Add(1)
 	go p.worker(task)
 	atomic.AddUint32(&p.threadCount, 1)
