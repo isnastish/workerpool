@@ -333,16 +333,23 @@ func TestNoMoreTasksColdBeSubmittedAfterWait(t *testing.T) {
 	var counter uint32
 
 	p := NewPool(displayMetrics, 4)
+	task := func() {
+		atomic.AddUint32(&counter, 1)
+	}
 
 	const TASKS_COUNT = 32
 	for i := 0; i < TASKS_COUNT; i++ {
-		p.SubmitTask(func() {
-			atomic.AddUint32(&counter, 1)
-		})
+		p.SubmitTask(task)
 	}
 
 	p.Wait()
 
 	assert.Equal(t, atomic.LoadUint32(&counter), uint32(32)) // using atomic.LoadUint32 even though it's no longer accessed concurrently.
 	assert.True(t, p.submissionBlocked)
+
+	// trying to submit a task
+	m := p.GetMetrics()
+	p.SubmitTask(task)
+
+	assert.Equal(t, m.tasksSubmitted, p.metrics.tasksSubmitted)
 }
