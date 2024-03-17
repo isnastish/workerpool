@@ -6,10 +6,16 @@ import (
 	"golang.org/x/net/html"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
+type UrlInfo struct {
+	url   string
+	depth int
+}
+
+// The bare minimum stack implementation.
+// Only serves as an example and shouldn't be used in a production!
 type Stack[T any] struct {
 	count int
 	data  []T
@@ -80,7 +86,7 @@ func traverseHtmlParseTree(n *html.Node, response *http.Response) []string {
 	urls := []string{}
 	for !nodeStack.Empty() {
 		var node *html.Node
-		if nodeStack.TryPop(&node) { // Just use pop?
+		if nodeStack.TryPop(&node) {
 			if node.Type == html.ElementNode && node.Data == "a" {
 				urls = append(urls, getURLs(node, response)...)
 			}
@@ -92,95 +98,96 @@ func traverseHtmlParseTree(n *html.Node, response *http.Response) []string {
 	return urls
 }
 
-type UrlInfo struct {
-	url   string
-	depth int
-}
+// func traverseURL_BFS_StackBased(url string, depthLevel int) {
+// 	urlStack := Stack[UrlInfo]{}
+// 	urlStack.Push(UrlInfo{url, 0})
 
-func traverseURL_BFS_StackBased(url string, depthLevel int) {
-	urlStack := Stack[UrlInfo]{}
-	urlStack.Push(UrlInfo{url, 0})
+// 	var totalUrls uint32
+// 	totalUrls++
 
-	var totalUrls uint32
-	totalUrls++
+// 	start := time.Now()
+// 	for !urlStack.Empty() {
+// 		var z UrlInfo
+// 		if urlStack.TryPop(&z) {
+// 			if z.depth < depthLevel {
+// 				start := time.Now()
+// 				response, err := http.Get(z.url)
+// 				took := time.Since(start)
 
-	start := time.Now()
-	for !urlStack.Empty() {
-		var z UrlInfo
-		if urlStack.TryPop(&z) {
-			if z.depth < depthLevel {
-				start := time.Now()
-				response, err := http.Get(z.url)
-				took := time.Since(start)
+// 				if err != nil {
+// 					continue
+// 				}
 
-				if err != nil {
-					continue
-				}
+// 				if response.StatusCode != http.StatusOK {
+// 					response.Body.Close()
+// 					continue
+// 				}
 
-				if response.StatusCode != http.StatusOK {
-					response.Body.Close()
-					continue
-				}
+// 				root, err := html.Parse(response.Body)
+// 				if err != nil {
+// 					response.Body.Close()
+// 					continue
+// 				}
 
-				root, err := html.Parse(response.Body)
-				if err != nil {
-					response.Body.Close()
-					continue
-				}
+// 				response.Body.Close()
 
-				response.Body.Close()
-
-				fmt.Printf("StackSize: %d, took: %v, url: %s[%d]\n", urlStack.Size(), took, z.url, z.depth)
-				for _, url := range traverseHtmlParseTree(root, response) {
-					totalUrls++
-					urlStack.Push(UrlInfo{url, z.depth + 1})
-				}
-			}
-		}
-	}
-	fmt.Printf("Total time: %v\n", time.Since(start))
-	fmt.Printf("Total urls: %d\n", totalUrls)
-}
+// 				fmt.Printf("StackSize: %d, took: %v, url: %s[%d]\n", urlStack.Size(), took, z.url, z.depth)
+// 				for _, url := range traverseHtmlParseTree(root, response) {
+// 					totalUrls++
+// 					urlStack.Push(UrlInfo{url, z.depth + 1})
+// 				}
+// 			}
+// 		}
+// 	}
+// 	fmt.Printf("Total time: %v\n", time.Since(start))
+// 	fmt.Printf("Total urls: %d\n", totalUrls)
+// }
 
 func traverseURL_BFS_Concurrent(url string, depth int) {
 	urls := make(chan UrlInfo)
 	go func() { urls <- UrlInfo{url, 0} }()
 
 	allUrls := make(chan string)
-	go func() { allUrls <- url }() // avoid deadlock
+	go func() { allUrls <- url }()
 
-	var index uint32
 	go func() {
 		for url := range allUrls {
-			fmt.Printf("%d: url: %s\n", atomic.LoadUint32(&index), url)
-			atomic.AddUint32(&index, 1)
+			fmt.Printf("url: %s\n", url)
 		}
 	}()
-	for info := range urls {
-		if info.depth < depth {
-			go func(info UrlInfo) {
-				response, err := http.Get(info.url)
-				if err != nil {
-					return
-				}
 
-				if response.StatusCode != http.StatusOK {
+	t := time.NewTimer(500 * time.Millisecond)
+	for {
+		select {
+		case info := <-urls:
+			if info.depth < depth {
+				go func(info UrlInfo) {
+					response, err := http.Get(info.url)
+					if err != nil {
+						return
+					}
+
+					if response.StatusCode != http.StatusOK {
+						response.Body.Close()
+						return
+					}
+
+					root, err := html.Parse(response.Body)
+					if err != nil {
+						response.Body.Close()
+						return
+					}
+
 					response.Body.Close()
-					return
-				}
-
-				root, err := html.Parse(response.Body)
-				if err != nil {
-					response.Body.Close()
-					return
-				}
-
-				response.Body.Close()
-				for _, url := range traverseHtmlParseTree(root, response) {
-					allUrls <- url
-					urls <- UrlInfo{url, info.depth + 1}
-				}
-			}(info)
+					for _, url := range traverseHtmlParseTree(root, response) {
+						urls <- UrlInfo{url, info.depth + 1}
+						allUrls <- url
+					}
+				}(info)
+			}
+			t.Reset(500 * time.Millisecond)
+		case <-t.C: // timeout if no urls were submitted in 500ml
+			return
 		}
 	}
 }
@@ -189,6 +196,7 @@ func main() {
 	var depth int
 	flag.IntVar(&depth, "depth", 2, "Depth level for traversing URLs")
 
-	traverseURL_BFS_StackBased("https://python.org", depth)
-	// traverseURL_BFS_Concurrent("https://python.org", depth)
+	// traverseURL_BFS_StackBased("https://python.org", depth)
+	traverseURL_BFS_Concurrent("https://python.org", depth)
+
 }
