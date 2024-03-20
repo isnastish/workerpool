@@ -2,14 +2,13 @@ package main
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 	"math/rand"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/goleak"
 )
 
 const displayMetrics = false
@@ -182,9 +181,9 @@ func TestExample(t *testing.T) {
 	m := p.GetMetrics()
 	assert.Equal(t, m.tasksSubmitted, dataSize)
 	assert.Equal(t, m.tasksDone, dataSize)
-	assert.Equal(t, m.threadsFinished, m.threadsSpawned)
+	assert.Equal(t, m.routinesSpawned, m.routinesFinished)
 
-	assert.True(t, p.tasksQueue.Empty())
+	assert.True(t, p.submitQueue.Empty())
 	assert.True(t, p.waitingQueue.Empty())
 }
 
@@ -225,9 +224,9 @@ func TestExample2(t *testing.T) {
 	m := p.GetMetrics()
 	assert.Equal(t, m.tasksSubmitted, dataSize)
 	assert.Equal(t, m.tasksDone, dataSize)
-	assert.Equal(t, m.threadsFinished, m.threadsSpawned)
+	assert.Equal(t, m.routinesSpawned, m.routinesFinished)
 
-	assert.True(t, p.tasksQueue.Empty())
+	assert.True(t, p.submitQueue.Empty())
 	assert.True(t, p.waitingQueue.Empty())
 }
 
@@ -346,10 +345,9 @@ func TestNoMoreTasksColdBeSubmittedAfterWait(t *testing.T) {
 
 	p.Wait()
 
-	assert.Equal(t, atomic.LoadUint32(&counter), uint32(32)) // using atomic.LoadUint32 even though it's no longer accessed concurrently.
-	assert.True(t, p.submissionBlocked)
+	assert.Equal(t, atomic.LoadUint32(&counter), uint32(32))
+	assert.True(t, p.blocked)
 
-	// trying to submit a task
 	m := p.GetMetrics()
 	p.SubmitTask(task)
 

@@ -5,27 +5,15 @@ import (
 	"fmt"
 	"golang.org/x/net/html"
 	"net/http"
-	"sync"
-	_ "time"
 )
 
-type UrlInfo struct {
-	url   string
-	depth int
-}
-
-// The bare minimum stack implementation.
-// Only serves as an example and shouldn't be used in a production!
+// A bare minimum stack implementation used for traversing html nodes iteratively.
 type Stack[T any] struct {
 	count int
 	data  []T
-	mu    sync.Mutex
 }
 
 func (s *Stack[T]) Push(v T) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.count == cap(s.data) {
 		newCap := max(cap(s.data)<<1, 64)
 		if cap(s.data) == 0 {
@@ -41,27 +29,27 @@ func (s *Stack[T]) Push(v T) {
 }
 
 func (s *Stack[T]) Empty() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	return s.count == 0
 }
 
 func (s *Stack[T]) Size() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	return s.count
 }
 
 func (s *Stack[T]) TryPop(v *T) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.count != 0 {
 		*v = s.data[s.count-1]
 		s.count--
 		return true
 	}
 	return false
+}
+
+type UrlInfo struct {
+	url string
+
+	// Maximum depth for traversing urls in breadth first search order.
+	depth int
 }
 
 func getURLs(n *html.Node, response *http.Response) []string {
@@ -160,7 +148,7 @@ func traverseURL_BFS_Concurrent(url string, depth int) {
 
 	for info := range urls {
 		z := info
-		if info.depth < depth {
+		if z.depth < depth {
 			p.SubmitTask(func() {
 				response, err := http.Get(z.url)
 				if err != nil {
@@ -193,7 +181,6 @@ func traverseURL_BFS_Concurrent(url string, depth int) {
 func main() {
 	var depth int
 	flag.IntVar(&depth, "depth", 2, "Depth level for traversing URLs")
-
 	// traverseURL_BFS_StackBased("https://python.org", depth)
 	traverseURL_BFS_Concurrent("https://python.org", depth)
 }
