@@ -16,12 +16,12 @@ package main
 // So we don't use doneCh when spawning a separate go routine with processTasks() procedure.
 
 import (
-	_ "fmt"
+	_ "github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"go.uber.org/zap"
 	"runtime"
 	"sync"
 	"sync/atomic"
-	_ "time"
 )
 
 type ThreadFunc func()
@@ -36,16 +36,18 @@ type Metrics struct {
 }
 
 type ThreadPool struct {
-	maxThreads     uint32
-	waitingQueue   *Queue[ThreadFunc]
-	submitQueue    *Queue[ThreadFunc]
-	workQueue      *Queue[ThreadFunc]
-	metrics        Metrics
-	displayMetrics bool
-	wg             sync.WaitGroup
-	doneCh         chan struct{}
-	threadCount    uint32
-	zapLogger      *zap.Logger
+	maxThreads   uint32
+	waitingQueue *Queue[ThreadFunc]
+	submitQueue  *Queue[ThreadFunc]
+	workQueue    *Queue[ThreadFunc]
+
+	wg          sync.WaitGroup
+	doneCh      chan struct{}
+	threadCount uint32
+	zapLogger   *zap.Logger
+
+	// there is no point in displaying metrics, they can only be accumulated
+	metrics Metrics
 
 	// atomic
 	waiting int32
@@ -54,10 +56,12 @@ type ThreadPool struct {
 	running bool
 }
 
-func NewPool(displayMetrics bool, numThreads ...uint32) *ThreadPool {
+func NewPool(numThreads ...uint32) *ThreadPool {
 	// Get a number of cores usable by the current process.
 	// This is equivalent to maximum amount of goroutines (workers) created.
 	hardwareCPU := uint32(runtime.NumCPU())
+
+	SetupZeroLog("debug")
 
 	var maxThreads uint32
 	if len(numThreads) > 0 {
@@ -74,17 +78,18 @@ func NewPool(displayMetrics bool, numThreads ...uint32) *ThreadPool {
 
 	const threadSafe = true
 	p := &ThreadPool{
-		maxThreads:     maxThreads,
-		submitQueue:    NewQueue[ThreadFunc](threadSafe),
-		workQueue:      NewQueue[ThreadFunc](threadSafe),
-		waitingQueue:   NewQueue[ThreadFunc](threadSafe),
-		displayMetrics: displayMetrics,
-		wg:             sync.WaitGroup{},
-		doneCh:         make(chan struct{}),
-		zapLogger:      logger,
+		maxThreads:   maxThreads,
+		submitQueue:  NewQueue[ThreadFunc](threadSafe),
+		workQueue:    NewQueue[ThreadFunc](threadSafe),
+		waitingQueue: NewQueue[ThreadFunc](threadSafe),
+		wg:           sync.WaitGroup{},
+		doneCh:       make(chan struct{}),
+		zapLogger:    logger,
 	}
 
 	go p.processTasks()
+
+	log.Debug().Uint32("MaxThreads", p.maxThreads)
 
 	return p
 }
@@ -192,16 +197,16 @@ func (p *ThreadPool) processTasks() {
 	p.wg.Wait()
 
 	// Display accumulated metrics.
-	if p.displayMetrics {
-		p.zapLogger.Info(
-			"Metrics",
-			zap.Uint32("Tasks submitted", atomic.LoadUint32(&p.metrics.tasksSubmitted)),
-			zap.Uint32("Tasks done", p.metrics.tasksDone),
-			zap.Uint32("Tasks queued", p.metrics.tasksQueued),
-			zap.Uint32("Threads spawned", p.metrics.routinesSpawned),
-			zap.Uint32("Threads finished", p.metrics.routinesFinished),
-		)
-	}
+	// if p.displayMetrics {
+	// 	p.zapLogger.Info(
+	// 		"Metrics",
+	// 		zap.Uint32("Tasks submitted", atomic.LoadUint32(&p.metrics.tasksSubmitted)),
+	// 		zap.Uint32("Tasks done", p.metrics.tasksDone),
+	// 		zap.Uint32("Tasks queued", p.metrics.tasksQueued),
+	// 		zap.Uint32("Threads spawned", p.metrics.routinesSpawned),
+	// 		zap.Uint32("Threads finished", p.metrics.routinesFinished),
+	// 	)
+	// }
 
 	p.doneCh <- struct{}{} // not required since close(p.doneCh) will do the job.
 	close(p.doneCh)
@@ -232,4 +237,5 @@ func (p *ThreadPool) Wait() {
 	p.blocked = true
 	atomic.AddInt32(&p.waiting, 1)
 	<-p.doneCh
+
 }

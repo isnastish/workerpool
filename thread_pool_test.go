@@ -11,8 +11,6 @@ import (
 	"testing"
 )
 
-const displayMetrics = false
-
 type integer interface {
 	int | int16 | int32 | int64
 }
@@ -99,7 +97,7 @@ type Chunk struct {
 
 func matchChunks(buf []byte, chunks chan Chunk) bool {
 	resCh := make(chan bool, len(chunks))
-	p1 := NewPool(displayMetrics, uint32(runtime.NumCPU()))
+	p1 := NewPool(uint32(runtime.NumCPU()))
 
 	for chunk := range chunks {
 		p1.SubmitTask(func() {
@@ -129,7 +127,7 @@ func TestClipThreadCount(t *testing.T) {
 
 	const maxThreads = 256
 	var expectedThreadCount = uint32(runtime.NumCPU())
-	p := NewPool(displayMetrics, maxThreads)
+	p := NewPool(maxThreads)
 	p.Wait()
 	assert.Equal(t, p.maxThreads, expectedThreadCount)
 }
@@ -138,7 +136,7 @@ func TestCorrectWorkerCount(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
 	const maxThreads = 16
-	p := NewPool(displayMetrics, maxThreads)
+	p := NewPool(maxThreads)
 	p.Wait()
 	assert.EqualValues(t, p.maxThreads, maxThreads)
 }
@@ -156,7 +154,7 @@ func TestExample(t *testing.T) {
 	}
 	dataSize := uint32(len(data))
 
-	p := NewPool(displayMetrics, maxThreads)
+	p := NewPool(maxThreads)
 	recvData := make([]int, 0, dataSize)
 	resCh := make(chan int, dataSize)
 
@@ -198,7 +196,7 @@ func TestExample2(t *testing.T) {
 	}
 
 	dataSize := uint32(len(data))
-	p := NewPool(displayMetrics, maxThreads)
+	p := NewPool(maxThreads)
 
 	recvData := make([]string, 0, dataSize)
 	resCh := make(chan string, dataSize)
@@ -250,7 +248,7 @@ func BenchmarkConcurrentAccumulate_T16xC16(b *testing.B) {
 
 	data := make([]int64, dataSize)
 	_ = populate(data, func(i int) int64 { return int64((i + 1) << 1) })
-	p := NewPool(displayMetrics, maxThreads)
+	p := NewPool(maxThreads)
 	nChunks := (dataSize / chunkSize)
 
 	if dataSize%chunkSize != 0 {
@@ -289,7 +287,7 @@ func TestFillHugeBufferWithDataConcurrently(t *testing.T) {
 	}
 
 	buf := make([]byte, totalSize)
-	p := NewPool(displayMetrics, 16)
+	p := NewPool(16)
 	chunks := make(chan Chunk, nChunks) // expected chunks.
 
 	showMemUsage()
@@ -333,7 +331,7 @@ func TestNoMoreTasksColdBeSubmittedAfterWait(t *testing.T) {
 
 	var counter uint32
 
-	p := NewPool(false, 4)
+	p := NewPool(4)
 	task := func() {
 		atomic.AddUint32(&counter, 1)
 	}

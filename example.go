@@ -144,7 +144,7 @@ func traverseURL_BFS_Concurrent(url string, depth int) {
 		}
 	}()
 
-	p := NewPool(false, 16)
+	p := NewPool()
 
 	for info := range urls {
 		z := info
