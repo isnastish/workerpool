@@ -8,10 +8,6 @@ which is the core core mechanism for passing data between go routines and synchr
 > **NOTE** This project was written exclusively for learning purposes and should never be used in production. 
 
 ## Overall desciption
-
-
-## Core data types and functionality
-
 ```go
 type ThreadPool struct {
 	maxThreads uint32
@@ -54,5 +50,5 @@ func (s *Stack[T]) Size() int
 Running the example: 
 ```sh
 go build
-./exmple -depth 3 -url https://golang.com
+./example -depth 3 -url https://golang.com
 ```
