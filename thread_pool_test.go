@@ -146,7 +146,7 @@ func TestExample(t *testing.T) {
 
 	const maxThreads uint32 = 8
 
-	data := []int{ // fibonacci numbers
+	data := []int{ // fibonacci sequence
 		0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89,
 		144, 233, 377, 610, 987, 1597, 2584, 4181,
 		6765, 10946, 17711, 28657, 46368, 75025,
@@ -176,7 +176,7 @@ func TestExample(t *testing.T) {
 
 	assert.ElementsMatch(t, data, recvData)
 
-	m := p.GetMetrics()
+	m := p.Debug_GetMetrics()
 	assert.Equal(t, m.tasksSubmitted, dataSize)
 	assert.Equal(t, m.tasksDone, dataSize)
 	assert.Equal(t, m.routinesSpawned, m.routinesFinished)
@@ -219,7 +219,7 @@ func TestExample2(t *testing.T) {
 
 	assert.ElementsMatch(t, data, recvData)
 
-	m := p.GetMetrics()
+	m := p.Debug_GetMetrics()
 	assert.Equal(t, m.tasksSubmitted, dataSize)
 	assert.Equal(t, m.tasksDone, dataSize)
 	assert.Equal(t, m.routinesSpawned, m.routinesFinished)
@@ -346,7 +346,7 @@ func TestNoMoreTasksColdBeSubmittedAfterWait(t *testing.T) {
 	assert.Equal(t, atomic.LoadUint32(&counter), uint32(32))
 	assert.True(t, p.blocked)
 
-	m := p.GetMetrics()
+	m := p.Debug_GetMetrics()
 	p.SubmitTask(task)
 
 	assert.Equal(t, m.tasksSubmitted, p.metrics.tasksSubmitted)

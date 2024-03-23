@@ -3,31 +3,35 @@ package main
 import (
 	"fmt"
 	"github.com/rs/zerolog"
+	"strings"
 	"time"
 )
 
-func setGlobalLogLevel(logLevel string) error {
-	logLevels := map[string]zerolog.Level{
-		"debug":   zerolog.DebugLevel,
-		"warning": zerolog.WarnLevel,
-		"info":    zerolog.InfoLevel,
-		"error":   zerolog.ErrorLevel,
-	}
+var logLevelsMap = map[string]zerolog.Level{
+	"debug":    zerolog.DebugLevel,
+	"info":     zerolog.InfoLevel,
+	"warning":  zerolog.WarnLevel,
+	"error":    zerolog.ErrorLevel,
+	"fatal":    zerolog.FatalLevel,
+	"panic":    zerolog.PanicLevel,
+	"disabled": zerolog.Disabled,
+	"trace":    zerolog.TraceLevel,
+}
 
-	if level, ok := logLevels[logLevel]; ok {
+func setLogLevel(logLevel string) error {
+	if level, exists := logLevelsMap[strings.ToLower(logLevel)]; exists {
 		zerolog.SetGlobalLevel(level)
 	} else {
 		return fmt.Errorf("undefined log level: %v", logLevel)
 	}
-
 	return nil
 }
 
 func SetupZeroLog(logLevel string) {
-	// zerolog.levelFieldName =
-	zerolog.TimeFieldFormat = time.RFC3339Nano
+	zerolog.TimeFieldFormat = time.RFC822
 
-	if err := setGlobalLogLevel("debug"); err != nil {
+	if err := setLogLevel("debug"); err != nil {
 		fmt.Printf("Failed to set global log level: %s", err.Error())
+		return
 	}
 }

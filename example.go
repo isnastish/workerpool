@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"golang.org/x/net/html"
 	"net/http"
+	"time"
 )
 
 // A bare minimum stack implementation used for traversing html nodes iteratively.
@@ -13,6 +14,7 @@ type Stack[T any] struct {
 	data  []T
 }
 
+// Push element of type T into the stack
 func (s *Stack[T]) Push(v T) {
 	if s.count == cap(s.data) {
 		newCap := max(cap(s.data)<<1, 64)
@@ -28,14 +30,18 @@ func (s *Stack[T]) Push(v T) {
 	s.count++
 }
 
+// Check if the stack is empty
 func (s *Stack[T]) Empty() bool {
 	return s.count == 0
 }
 
+// Retrieve stack size
 func (s *Stack[T]) Size() int {
 	return s.count
 }
 
+// If stack is not empty, pops the last element and assignes it to v, returns true.
+// false otherwise.
 func (s *Stack[T]) TryPop(v *T) bool {
 	if s.count != 0 {
 		*v = s.data[s.count-1]
@@ -45,13 +51,7 @@ func (s *Stack[T]) TryPop(v *T) bool {
 	return false
 }
 
-type UrlInfo struct {
-	url string
-
-	// Maximum depth for traversing urls in breadth first search order.
-	depth int
-}
-
+// Accumulate all the URL's from the current HTML node.
 func getURLs(n *html.Node, response *http.Response) []string {
 	urls := []string{}
 	for _, atrib := range n.Attr {
@@ -67,6 +67,7 @@ func getURLs(n *html.Node, response *http.Response) []string {
 	return urls
 }
 
+// Traverses html nodes iteratively
 func traverseHtmlParseTree(n *html.Node, response *http.Response) []string {
 	nodeStack := Stack[*html.Node]{}
 	nodeStack.Push(n)
@@ -86,51 +87,13 @@ func traverseHtmlParseTree(n *html.Node, response *http.Response) []string {
 	return urls
 }
 
-// func traverseURL_BFS_StackBased(url string, depthLevel int) {
-// 	urlStack := Stack[UrlInfo]{}
-// 	urlStack.Push(UrlInfo{url, 0})
+// A bundle to hold URL name and its depth limit
+type UrlInfo struct {
+	url   string
+	depth int
+}
 
-// 	var totalUrls uint32
-// 	totalUrls++
-
-// 	start := time.Now()
-// 	for !urlStack.Empty() {
-// 		var z UrlInfo
-// 		if urlStack.TryPop(&z) {
-// 			if z.depth < depthLevel {
-// 				start := time.Now()
-// 				response, err := http.Get(z.url)
-// 				took := time.Since(start)
-
-// 				if err != nil {
-// 					continue
-// 				}
-
-// 				if response.StatusCode != http.StatusOK {
-// 					response.Body.Close()
-// 					continue
-// 				}
-
-// 				root, err := html.Parse(response.Body)
-// 				if err != nil {
-// 					response.Body.Close()
-// 					continue
-// 				}
-
-// 				response.Body.Close()
-
-// 				fmt.Printf("StackSize: %d, took: %v, url: %s[%d]\n", urlStack.Size(), took, z.url, z.depth)
-// 				for _, url := range traverseHtmlParseTree(root, response) {
-// 					totalUrls++
-// 					urlStack.Push(UrlInfo{url, z.depth + 1})
-// 				}
-// 			}
-// 		}
-// 	}
-// 	fmt.Printf("Total time: %v\n", time.Since(start))
-// 	fmt.Printf("Total urls: %d\n", totalUrls)
-// }
-
+// Core function to traverse all URL's in breadth first search manner and print them to stdout.
 func traverseURL_BFS_Concurrent(url string, depth int) {
 	urls := make(chan UrlInfo)
 	go func() { urls <- UrlInfo{url, 0} }()
@@ -146,41 +109,53 @@ func traverseURL_BFS_Concurrent(url string, depth int) {
 
 	p := NewPool()
 
-	for info := range urls {
-		z := info
-		if z.depth < depth {
-			p.SubmitTask(func() {
-				response, err := http.Get(z.url)
-				if err != nil {
-					return
-				}
+Loop:
+	for {
+		select {
+		case info := <-urls:
+			z := info
+			if z.depth < depth {
+				p.SubmitTask(func() {
+					response, err := http.Get(z.url)
+					if err != nil {
+						return
+					}
 
-				if response.StatusCode != http.StatusOK {
+					if response.StatusCode != http.StatusOK {
+						response.Body.Close()
+						return
+					}
+
+					root, err := html.Parse(response.Body)
+					if err != nil {
+						response.Body.Close()
+						return
+					}
+
 					response.Body.Close()
-					return
-				}
-
-				root, err := html.Parse(response.Body)
-				if err != nil {
-					response.Body.Close()
-					return
-				}
-
-				response.Body.Close()
-				for _, url := range traverseHtmlParseTree(root, response) {
-					urls <- UrlInfo{url, z.depth + 1}
-					allUrls <- url
-				}
-			})
+					for _, url := range traverseHtmlParseTree(root, response) {
+						urls <- UrlInfo{url, z.depth + 1}
+						allUrls <- url
+					}
+				})
+			}
+		case <-time.After(1000 * time.Millisecond):
+			break Loop
 		}
 	}
-
 	p.Wait()
 }
 
+type Options struct {
+	depth int
+	url   string
+}
+
 func main() {
-	var depth int
-	flag.IntVar(&depth, "depth", 2, "Depth level for traversing URLs")
-	// traverseURL_BFS_StackBased("https://python.org", depth)
-	traverseURL_BFS_Concurrent("https://python.org", depth)
+	o := Options{}
+
+	flag.IntVar(&o.depth, "depth", 2, "Depth level for traversing URLs")
+	flag.StringVar(&o.url, "url", "https://python.org", "URL to travers")
+
+	traverseURL_BFS_Concurrent(o.url, o.depth)
 }
