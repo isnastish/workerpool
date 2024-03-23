@@ -3,7 +3,7 @@ The idea behind this project was to get accustomed to `Go` programming language 
 by implementing a thread pool. Worth noting that there are multiple ways you can write a thread pool, 
 and the way I did it, probably not how an experienced Golang programmer would do. 
 My current solution is based around thread-safe queues, but that could be easily replaced with channels, 
-which is the core core mechanism for passing data between go routines and synchronizing them.
+the core mechanism for passing data between go routines and synchronizing them.
 
 > **NOTE** This project was written exclusively for learning purposes and should never be used in a production. 
 
@@ -63,7 +63,7 @@ An example could be found in `example.go` file. The programm traverses a specifi
 in a breadth-first search fashion, and outputs all href(s) to stdout.
 
 In orde to achieve that goal I had to implement a simple, generic stack with `Push/TryPop/Empty and Size` methods.
-Here is the stack data type and its core functions declarations:
+Here is the stack data type and its core function declarations:
 ```go
 type Stack[T any] struct {
 	count int
