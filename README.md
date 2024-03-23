@@ -5,9 +5,11 @@ and the way I did it, probably not how an experienced Golang programmer would do
 My current solution is based around thread-safe queues, but that could be easily replaced with channels, 
 which is the core core mechanism for passing data between go routines and synchronizing them.
 
-> **NOTE** This project was written exclusively for learning purposes and should never be used in production. 
+> **NOTE** This project was written exclusively for learning purposes and should never be used in a production. 
 
 ## Overall desciption
+As mentioned above, a decision was made to use thread-safe queues for tasks submission and processing, 
+though use of channels will be more natural. The core data type looks like this:
 ```go
 type ThreadPool struct {
 	maxThreads uint32
@@ -27,6 +29,15 @@ type ThreadPool struct {
 	blocked bool
 }
 ```
+Where `maxThreads` is the maximum number of goroutines running concurrently.
+`waitingQueue` is used when all the workers (goroutines) are busy and no new can be spawned, a task is put into a waiting queue.
+`submitQueue` is responsible for tasks submission.
+`workQueue` a queue to pull work from.
+The rest of the data are internals and easily understandable by looking at code.
+
+All the logic is happening inside `processTasks()` function, which is itself is executed in a separate go routine.
+This was mainly done to add a possibility to process tasks on the background while some others still could be submitted.
+
 
 ## Example
 A simple web-crawler was implemented to demonstrate the functionality of a thread pool in action. 
@@ -52,3 +63,6 @@ Running the example:
 go build
 ./example -depth 3 -url https://golang.com
 ```
+
+> **NOTE** For more examples look at the `thread_pool_test.go`, where I implemented filling a giant (4GB) buffer of bytes concurrently
+> and parallelized some sorting algorithms.
