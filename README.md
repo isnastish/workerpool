@@ -51,7 +51,8 @@ func (s *Stack[T]) Empty() bool
 func (s *Stack[T]) Size() int
 ```
 
-```shell
+Running the example: 
+```sh
 go build
 ./exmple -depth 3 -url https://golang.com
 ```
