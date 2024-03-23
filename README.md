@@ -43,7 +43,17 @@ Spawned workers constantly polling a work queue for available tasks and execute 
 If the amount of workers is equal to `maxThreads` all the subsequent tasks are pushed into a `waitQueue` instead. 
 No new workers are spawned until a wait queue is empty.
 
-###Example:
+Example:
+```go
+const nThreads = 8
+p := NewPool(nThreads)
+for i := 0; i < (1 << 10); i++ {
+	p.SubmitTask(func(){
+		// do something
+	})	
+}
+p.Wait()
+```
 
 > **IMPORTANT** Each call to `NewPool(...)` should be supplemented with `Wait()` after all the tasks have been submitted.
 
