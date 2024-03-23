@@ -1,10 +1,12 @@
-# Overall desciption
-An implementation of a thread pool in `Go` programming language. 
-
 ## Inspirations
-The idea behind this project was to get accustomed to `Go` and its concurrency model. 
+The idea behind this project was to get accustomed to `Go` programming language and its concurrency model
+by implementing a thread pool.
+**NOTE** This project was written exclusively for learning purposes and should never be used in real production. 
 
-Core structure: 
+## Overall desciption
+
+## Core data types and functionality
+
 ```go
 type ThreadPool struct {
 	maxThreads uint32
@@ -24,3 +26,5 @@ type ThreadPool struct {
 	blocked bool
 }
 ```
+
+## Example
