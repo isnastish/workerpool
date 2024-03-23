@@ -1,7 +1,8 @@
 ## Inspirations
 The idea behind this project was to get accustomed to `Go` programming language and its concurrency model
 by implementing a thread pool.
-**NOTE** This project was written exclusively for learning purposes and should never be used in real production. 
+
+> **NOTE** This project was written exclusively for learning purposes and should never be used in real production. 
 
 ## Overall desciption
 
