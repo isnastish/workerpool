@@ -7,7 +7,7 @@ which is the core core mechanism for passing data between go routines and synchr
 
 > **NOTE** This project was written exclusively for learning purposes and should never be used in a production. 
 
-## Overall desciption
+## Overall description
 As mentioned above, a decision was made to use thread-safe queues for tasks submission and processing, 
 though use of channels will be more natural. The core data type looks like this:
 ```go
