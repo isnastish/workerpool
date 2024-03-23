@@ -63,7 +63,7 @@ An example could be found in `example.go` file. The programm traverses a specifi
 in a breadth-first search fashion, and outputs all href(s) to stdout.
 
 In orde to achieve that goal I had to implement a simple, generic stack with `Push/TryPop/Empty and Size` methods.
-Here is the stack data type and its core functions declarations:
+Here is the stack data type and its core function declarations:
 ```go
 type Stack[T any] struct {
 	count int
