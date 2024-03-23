@@ -50,3 +50,8 @@ func (s *Stack[T]) TryPop(v *T) bool
 func (s *Stack[T]) Empty() bool
 func (s *Stack[T]) Size() int
 ```
+
+```shell
+go build
+./exmple -depth 3 -url https://golang.com
+```
