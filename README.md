@@ -2,6 +2,8 @@
 The idea behind this project was to get accustomed to `Go` programming language and its concurrency model
 by implementing a thread pool. Worth noting that there are multiple ways you can write a thread pool, 
 and they way I did it probably not how an experienced Golang programmer would do. 
+My current solution is based around thread-safe queues, but that could be easily replaced with channels, 
+since this is the core mechanism for passing data between go routines and synchronizing them.
 
 > **NOTE** This project was written exclusively for learning purposes and should never be used in production. 
 
