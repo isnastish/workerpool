@@ -36,8 +36,16 @@ Where `maxThreads` is the maximum number of goroutines running concurrently.
 The rest of the data are internals and easily understandable by looking at code.
 
 All the logic is happening inside `processTasks()` function, which is itself is executed in a separate go routine.
-This was mainly done to add a possibility to process tasks on the background while some others still could be submitted.
+This was mainly done to add a possibility to process tasks on the background while some more still could be submitted.
 
+The flow is pretty straightforward, we pull tasks from a `submitQueue` and enqueue them into `workQueue`. 
+Spawned workers constantly polling a work queue for available tasks and execute them. 
+If the amount of workers is equal to `maxThreads` all the subsequent tasks are pushed into a `waitQueue` instead. 
+No new workers are spawned until a wait queue is empty.
+
+###Example:
+
+> **IMPORTANT** Each call to `NewPool(...)` should be supplemented with `Wait()` after all the tasks have been submitted.
 
 ## Example
 A simple web-crawler was implemented to demonstrate the functionality of a thread pool in action. 
@@ -64,5 +72,5 @@ go build
 ./example -depth 3 -url https://golang.com
 ```
 
-> **NOTE** For more examples look at the `thread_pool_test.go`, where I implemented filling a giant (4GB) buffer of bytes concurrently
+> **NOTE** For more examples look at the `thread_pool_test.go`, where I implemented filling in a giant (4GB) buffer of bytes concurrently
 > and parallelized some sorting algorithms.
