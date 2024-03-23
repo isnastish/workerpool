@@ -157,5 +157,7 @@ func main() {
 	flag.IntVar(&o.depth, "depth", 2, "Depth level for traversing URLs")
 	flag.StringVar(&o.url, "url", "https://python.org", "URL to travers")
 
+	flag.Parse()
+
 	traverseURL_BFS_Concurrent(o.url, o.depth)
 }
