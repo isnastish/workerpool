@@ -35,7 +35,7 @@ type ThreadPool struct {
 
 	// NOTE: logsEnabled flag should be removed once I figure out how to do concurrent logging.
 	// Because currently, with logging enabled, some tests would block forewer due to the fact
-	// that the writer is not protected a mutex and prohibits simultaneous writes.
+	// that the writer is not protected with a mutex and prohibits simultaneous writes.
 	// Sometimes all the logs could be displayed correctly without blocking, but sometimes they don't.
 	logsEnabled bool
 	*Logger
@@ -60,8 +60,8 @@ func NewPool(numThreads ...uint32) *ThreadPool {
 	p := &ThreadPool{
 		maxThreads:   maxThreads,
 		submitQueue:  NewQueue[ThreadFunc](),
-		workQueue:    NewQueue[ThreadFunc](),
 		waitingQueue: NewQueue[ThreadFunc](),
+		workQueue:    NewQueue[ThreadFunc](),
 		wg:           sync.WaitGroup{},
 		doneCh:       make(chan struct{}),
 		Logger:       NewLogger("debug"),

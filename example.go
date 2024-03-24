@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	_ "fmt"
+	"fmt"
 	"golang.org/x/net/html"
 	"net/http"
 	"time"
@@ -45,6 +45,8 @@ func (s *Stack[T]) Size() int {
 func (s *Stack[T]) TryPop(v *T) bool {
 	if s.count != 0 {
 		*v = s.data[s.count-1]
+		var zeroElement T
+		s.data[s.count-1] = zeroElement
 		s.count--
 		return true
 	}
@@ -103,8 +105,7 @@ func traverseURL_BFS_Concurrent(url string, depth int) {
 
 	go func() {
 		for url := range allUrls {
-			//fmt.Printf("url: %s\n", url)
-			_ = url
+			fmt.Printf("url: %s\n", url)
 		}
 	}()
 
