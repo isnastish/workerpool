@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/rs/zerolog/log"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -20,8 +19,8 @@ type Metrics struct {
 type ThreadPool struct {
 	maxThreads uint32
 
-	waitingQueue *Queue[ThreadFunc]
 	submitQueue  *Queue[ThreadFunc]
+	waitingQueue *Queue[ThreadFunc]
 	workQueue    *Queue[ThreadFunc]
 
 	wg          sync.WaitGroup
@@ -33,6 +32,13 @@ type ThreadPool struct {
 	waiting int32
 
 	blocked bool
+
+	// NOTE: logsEnabled flag should be removed once I figure out how to do concurrent logging.
+	// Because currently, with logging enabled, some tests would block forewer due to the fact
+	// that the writer is not protected a mutex and prohibits simultaneous writes.
+	// Sometimes all the logs could be displayed correctly without blocking, but sometimes they don't.
+	logsEnabled bool
+	*Logger
 }
 
 func NewPool(numThreads ...uint32) *ThreadPool {
@@ -51,17 +57,17 @@ func NewPool(numThreads ...uint32) *ThreadPool {
 		maxThreads = hardwareCPU
 	}
 
-	SetupZeroLog("debug")
-	log.Info().Uint32("threads", maxThreads).Msg("Thread pool initialized")
-
-	const threadSafe = true
 	p := &ThreadPool{
 		maxThreads:   maxThreads,
-		submitQueue:  NewQueue[ThreadFunc](threadSafe),
-		workQueue:    NewQueue[ThreadFunc](threadSafe),
-		waitingQueue: NewQueue[ThreadFunc](threadSafe),
+		submitQueue:  NewQueue[ThreadFunc](),
+		workQueue:    NewQueue[ThreadFunc](),
+		waitingQueue: NewQueue[ThreadFunc](),
 		wg:           sync.WaitGroup{},
 		doneCh:       make(chan struct{}),
+		Logger:       NewLogger("debug"),
+
+		// TODO: Uncomment this line once the logging is thread-safe
+		// logsEnabled: true,
 	}
 
 	go p.processTasks()
@@ -71,16 +77,22 @@ func NewPool(numThreads ...uint32) *ThreadPool {
 
 func (p *ThreadPool) SubmitTask(task func()) {
 	if nil == task {
-		log.Info().Msg("nil task was submitted")
+		if p.logsEnabled {
+			p.logger.Info().Msg("nil task was submitted")
+		}
 		return
 	}
 
 	if p.blocked {
-		log.Info().Msg("thread pool blocked, no more tasks could be submitted")
+		if p.logsEnabled {
+			p.logger.Info().Msg("thread pool blocked, no more tasks could be submitted")
+		}
 		return
 	}
 
-	log.Debug().Msg("task submitted")
+	if p.logsEnabled {
+		p.logger.Info().Msg("task has been submitted")
+	}
 
 	p.submitQueue.Push(task)
 	atomic.AddUint32(&p.metrics.tasksSubmitted, 1)
@@ -105,19 +117,25 @@ func (p *ThreadPool) processTasks() {
 
 		var task ThreadFunc
 		if p.submitQueue.TryPop(&task) {
+			// New workers can be spawned only if we haven't reached the limit of maximum workers,
+			// or we've reached the limit but then some of them finished their work, in that case
+			// new could be created.
 			if atomic.LoadUint32(&p.threadCount) < p.maxThreads {
 				p.workQueue.Push(task)
+
+				if p.logsEnabled {
+					p.logger.Info().Msg("worker created")
+				}
 
 				p.wg.Add(1)
 				go p.worker()
 
-				log.Debug().Uint32("CurrentThreads", atomic.LoadUint32(&p.threadCount)).Msg("worker was created")
-
-				atomic.AddUint32(&p.threadCount, 1)
 				p.metrics.routinesSpawned++
 			} else {
 				// If all the workers are busy, put task into a waiting queue for further processing.
-				log.Debug().Msg("all workers are busy, task pushed to the waiting queue")
+				if p.logsEnabled {
+					p.logger.Info().Msg("all workers are busy, task is pushed to the waiting queue")
+				}
 
 				p.waitingQueue.Push(task)
 				p.metrics.tasksQueued++
@@ -141,6 +159,19 @@ func (p *ThreadPool) Debug_GetMetrics() Metrics {
 }
 
 func (p *ThreadPool) worker() {
+	if p.logsEnabled {
+		p.logger.Info().Msg("worker started")
+	}
+
+	defer func() {
+		if p.logsEnabled {
+			p.logger.Info().Msg("worker finished")
+		}
+		p.wg.Done()
+	}()
+
+	atomic.AddUint32(&p.threadCount, 1)
+
 	var task ThreadFunc
 	for !p.workQueue.Empty() {
 		if p.workQueue.TryPop(&task) {
@@ -153,8 +184,6 @@ func (p *ThreadPool) worker() {
 	// in case the waiting queue is not empty and waiting for at least one worker to complete.
 	atomic.AddUint32(&p.threadCount, ^uint32(0))
 	atomic.AddUint32(&p.metrics.routinesFinished, 1)
-
-	p.wg.Done()
 }
 
 func (p *ThreadPool) Wait() {

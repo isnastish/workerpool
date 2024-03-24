@@ -14,8 +14,8 @@ though use of channels will be more natural. The core data type looks like this:
 type ThreadPool struct {
 	maxThreads uint32
 
-	waitingQueue *Queue[ThreadFunc]
 	submitQueue  *Queue[ThreadFunc]
+	waitingQueue *Queue[ThreadFunc]
 	workQueue    *Queue[ThreadFunc]
 
 	wg          sync.WaitGroup
@@ -27,6 +27,9 @@ type ThreadPool struct {
 	waiting int32
 
 	blocked bool
+
+	logsEnabled bool
+	*Logger
 }
 ```
 Where `maxThreads` is the maximum number of goroutines running concurrently.
@@ -84,3 +87,7 @@ go build
 
 > **NOTE** For more examples look at the `thread_pool_test.go`, where I implemented filling in a giant (4GB) buffer of bytes concurrently
 > and parallelized some sorting algorithms.
+
+## Logging
+zerolog is used as an underlying system for logging with custom settings to produce nicely formatted logs: 
+> **EXAMPLE** 24 Mar 24 10:32 CET24 Mar 24 10:32 CET |DEBUG| Msg: worker finished CurrentThreads: 33

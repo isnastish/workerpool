@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const threadSafe = true
-
 type Aggregate struct {
 	i32 int
 	str string
@@ -33,14 +31,14 @@ func popN[T any](q *Queue[T], n int) []T {
 }
 
 func TestQueue_CreationNoCapacity(t *testing.T) {
-	q := NewQueue[string](threadSafe)
+	q := NewQueue[string]()
 
 	assert.EqualValues(t, q.Size(), 0)
 	assert.EqualValues(t, q.Cap(), 0)
 }
 
 func TestQueue_CreationUseDefaultCapacity(t *testing.T) {
-	q := NewQueue[string](threadSafe)
+	q := NewQueue[string]()
 
 	q.Push("baz")
 
@@ -54,7 +52,7 @@ func TestQueue_CreationCustomCapacity(t *testing.T) {
 	const cap = 777
 	var expectedCap = ceilPow2(cap) // round Up to the next power of 2.
 
-	q := NewQueue[string](threadSafe, cap)
+	q := NewQueue[string](cap)
 
 	assert.EqualValues(t, q.Cap(), expectedCap)
 	assert.EqualValues(t, q.Size(), 0)
@@ -63,7 +61,7 @@ func TestQueue_CreationCustomCapacity(t *testing.T) {
 func TestQueue_PushN(t *testing.T) {
 	const N = 1 << 10
 	{
-		q := NewQueue[int](threadSafe, N)
+		q := NewQueue[int](N)
 
 		res := pushN(q, N, func(i int) int { return i*10 + (i << 1) })
 
@@ -75,7 +73,7 @@ func TestQueue_PushN(t *testing.T) {
 	}
 
 	{
-		q := NewQueue[string](threadSafe, N)
+		q := NewQueue[string](N)
 
 		res := pushN(q, N/2, func(i int) string { return "push_N:" + strconv.Itoa(i) })
 
@@ -90,7 +88,7 @@ func TestQueue_PushN(t *testing.T) {
 
 func TestQueue_ForceToGrow(t *testing.T) {
 	const N = 16
-	q := NewQueue[int](threadSafe, N)
+	q := NewQueue[int](N)
 
 	res := pushN(q, N, func(i int) int { return i * 10 })
 	res = append(res, pushN(q, N/2, func(i int) int { return (i + 10) * 10 })...)
@@ -106,7 +104,7 @@ func TestQueue_ForceToGrow(t *testing.T) {
 
 func TestQueue_PushPop(t *testing.T) {
 	const N = 8
-	q := NewQueue[string](threadSafe, N)
+	q := NewQueue[string](N)
 
 	pushN(q, N, func(i int) string { return "push_N:" + strconv.Itoa(i) })
 
@@ -125,7 +123,7 @@ func TestQueue_PushPop(t *testing.T) {
 
 func TestQueue_PopN(t *testing.T) {
 	const N = 16
-	q := NewQueue[string](threadSafe, N)
+	q := NewQueue[string](N)
 
 	// Insert N-1 elements so q.back doesn't wrap to 0.
 	pushRes := pushN(q, N-1, func(i int) string { return "push_N:" + strconv.Itoa(i*10) })
@@ -138,7 +136,7 @@ func TestQueue_PopN(t *testing.T) {
 func TestQueue_WrapBackIndex(t *testing.T) {
 	const N = 16
 
-	q := NewQueue[int](threadSafe, N)
+	q := NewQueue[int](N)
 
 	// After pushing:
 	// [1, 32768], N = 16
@@ -171,7 +169,7 @@ func TestQueue_WrapBackIndex(t *testing.T) {
 
 func TestQueue_WrapFrontIndex(t *testing.T) {
 	const N = 8
-	q := NewQueue[int](threadSafe, N)
+	q := NewQueue[int](N)
 
 	// After push:
 	//  [2 4 8 16 32 64 128 256]
@@ -211,13 +209,13 @@ func TestQueue_WrapFrontIndex(t *testing.T) {
 }
 
 func TestQueue_IsEmpty(t *testing.T) {
-	q := NewQueue[Aggregate](threadSafe)
+	q := NewQueue[Aggregate]()
 	assert.True(t, q.Empty())
 }
 
 func TestQueue_MakeEmpty(t *testing.T) {
 	const N = 4
-	q := NewQueue[Aggregate](threadSafe)
+	q := NewQueue[Aggregate]()
 
 	pushN(q, N, func(i int) Aggregate {
 		return Aggregate{i32: (1 << i), str: "push_N:" + strconv.Itoa(i)}
@@ -232,7 +230,7 @@ func TestQueue_MakeEmpty(t *testing.T) {
 
 func TestQueue_CopyTwoChunksWhenQueueIsFull(t *testing.T) {
 	const N = 4
-	q := NewQueue[int](threadSafe, N)
+	q := NewQueue[int](N)
 
 	q.Push(-124)
 	q.Push(99)
@@ -279,7 +277,7 @@ func TestQueue_CopyTwoChunksWhenQueueIsFull(t *testing.T) {
 
 func TestQueue_SingleTryPop(t *testing.T) {
 	const N = 16
-	q := NewQueue[string](threadSafe, N)
+	q := NewQueue[string](N)
 
 	res := pushN(q, N/4, func(i int) string { return "push_N:" + strconv.Itoa(i) })
 	assert.ElementsMatch(t, res, q.buf[0:N/4])
@@ -296,7 +294,7 @@ func TestQueue_SingleTryPop(t *testing.T) {
 
 func TestQueue_MultipleTryPop(t *testing.T) {
 	const N = 4
-	q := NewQueue[int](threadSafe, N)
+	q := NewQueue[int](N)
 
 	pushN(q, N, func(i int) int { return i << 1 })
 
@@ -320,7 +318,7 @@ func TestQueue_FlushNoWrapping(t *testing.T) {
 	const N = 8
 	const halfN = N / 2
 
-	q := NewQueue[int](threadSafe)
+	q := NewQueue[int]()
 	res := pushN(q, halfN, func(i int) int { return i << 1 })
 	expectedBuf := make([]int, halfN)
 	copy(expectedBuf, res)
@@ -341,7 +339,7 @@ func TestQueue_FlushWithWrapping(t *testing.T) {
 	const N = 8
 	const halfN = N / 2
 
-	q := NewQueue[string](threadSafe)
+	q := NewQueue[string]()
 	res0 := pushN(q, N, func(i int) string { return "pushN:" + strconv.Itoa(i<<1) })
 	popN(q, halfN)
 	res1 := pushN(q, halfN-1, func(i int) string { return "pushN:" + strconv.Itoa((i*10)<<1) })
@@ -364,7 +362,7 @@ func TestQueue_FlushWithWrapping(t *testing.T) {
 
 func TestQueue_Clear(t *testing.T) {
 	const halfCap = minCap / 2
-	q := NewQueue[int](threadSafe)
+	q := NewQueue[int]()
 
 	res := pushN(q, halfCap, func(i int) int { return i << 1 })
 	assert.ElementsMatch(t, q.buf[0:halfCap], res)
@@ -380,7 +378,7 @@ func TestQueue_Clear(t *testing.T) {
 
 func TestQueue_ReplaceOnEmptyQueueShouldPanic(t *testing.T) {
 	const N = 4
-	q := NewQueue[string](threadSafe, N)
+	q := NewQueue[string](N)
 
 	defer func() {
 		r := recover()
@@ -392,7 +390,7 @@ func TestQueue_ReplaceOnEmptyQueueShouldPanic(t *testing.T) {
 
 func TestQueue_ReplaceIndexOutOfRange(t *testing.T) {
 	const N = 4
-	q := NewQueue[string](threadSafe, N)
+	q := NewQueue[string](N)
 
 	defer func() {
 		r := recover()
@@ -409,7 +407,7 @@ func TestQueue_ReplaceIndexOutOfRange(t *testing.T) {
 
 func TestQueue_ReplaceNoWrapping(t *testing.T) {
 	const N = 4
-	q := NewQueue[int](threadSafe, N)
+	q := NewQueue[int](N)
 
 	res := pushN(q, N, func(i int) int { return i << 1 })
 	assert.ElementsMatch(t, q.buf, res)
@@ -425,7 +423,7 @@ func TestQueue_ReplaceWithWrapping(t *testing.T) {
 	const N = 8
 	const halfN = N / 2
 
-	q := NewQueue[int](threadSafe, N)
+	q := NewQueue[int](N)
 
 	res0 := pushN(q, N, func(i int) int { return i << 1 })
 	popN(q, halfN)

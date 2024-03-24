@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	_ "fmt"
 	"golang.org/x/net/html"
 	"net/http"
 	"time"
@@ -103,7 +103,8 @@ func traverseURL_BFS_Concurrent(url string, depth int) {
 
 	go func() {
 		for url := range allUrls {
-			fmt.Printf("url: %s\n", url)
+			//fmt.Printf("url: %s\n", url)
+			_ = url
 		}
 	}()
 

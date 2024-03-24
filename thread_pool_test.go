@@ -332,13 +332,12 @@ func TestNoMoreTasksColdBeSubmittedAfterWait(t *testing.T) {
 	var counter uint32
 
 	p := NewPool(4)
-	task := func() {
-		atomic.AddUint32(&counter, 1)
-	}
 
 	const TASKS_COUNT = 32
 	for i := 0; i < TASKS_COUNT; i++ {
-		p.SubmitTask(task)
+		p.SubmitTask(func() {
+			atomic.AddUint32(&counter, 1)
+		})
 	}
 
 	p.Wait()
@@ -347,7 +346,9 @@ func TestNoMoreTasksColdBeSubmittedAfterWait(t *testing.T) {
 	assert.True(t, p.blocked)
 
 	m := p.Debug_GetMetrics()
-	p.SubmitTask(task)
+	p.SubmitTask(func() {
+		atomic.AddUint32(&counter, 1)
+	})
 
 	assert.Equal(t, m.tasksSubmitted, p.metrics.tasksSubmitted)
 }
